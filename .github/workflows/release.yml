@@ -1,0 +1,64 @@
+name: Release
+
+# Publishes the package when you push a version tag, e.g.:
+#   npm version patch   # bumps package.json, commits, and creates the tag
+#   git push --follow-tags
+# The tag (vX.Y.Z) must match the version in package.json AND server.json.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # create the GitHub Release
+  id-token: write # npm provenance + (optional) MCP registry OIDC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify tag matches versions
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          SRV="$(node -p "require('./server.json').version")"
+          echo "tag=$TAG  package.json=$PKG  server.json=$SRV"
+          if [ "$TAG" != "$PKG" ]; then echo "::error::tag v$TAG does not match package.json version $PKG"; exit 1; fi
+          if [ "$TAG" != "$SRV" ]; then echo "::error::tag v$TAG does not match server.json version $SRV"; exit 1; fi
+
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+      # Optional: publish to the official MCP Registry (registry.modelcontextprotocol.io).
+      # Enable by setting the repo variable PUBLISH_TO_MCP_REGISTRY=true
+      # (Settings → Secrets and variables → Actions → Variables). Uses passwordless
+      # GitHub OIDC for the io.github.<owner> namespace — no secret required.
+      # Confirm the current install command at https://modelcontextprotocol.io/registry.
+      - name: Publish to MCP Registry
+        if: vars.PUBLISH_TO_MCP_REGISTRY == 'true'
+        run: |
+          curl -sSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar -xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

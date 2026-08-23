@@ -44,6 +44,34 @@ Submit via the Cursor directory site. Provide the install command; the "Add to C
 
 These are community catalogs that index public servers. Submit the repo URL (PulseMCP, mcp.so) or open a PR to the `punkpeye/awesome-mcp-servers` list. A clear README + `server.json` is all they need.
 
+## Automated releases (git tags)
+
+A GitHub Actions workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) publishes on version tags. One-time setup, then every release is a tag push.
+
+**One-time setup**
+
+1. Create an npm **automation** access token (npmjs.com → Access Tokens → Granular/Automation).
+2. Add it as a repo secret:
+   ```bash
+   gh secret set NPM_TOKEN --repo dockndevai/mcp-kubernetes
+   ```
+   (Or set it once as an organization secret shared across all the servers.)
+3. *(Optional)* to also publish to the official MCP Registry on each release, set a repo variable:
+   ```bash
+   gh variable set PUBLISH_TO_MCP_REGISTRY --repo dockndevai/mcp-kubernetes --body true
+   ```
+   This uses passwordless GitHub OIDC for the `io.github.dockndevai` namespace — no extra secret.
+
+**Cutting a release**
+
+```bash
+npm version patch      # bumps package.json, commits, creates the vX.Y.Z tag
+# also bump "version" in server.json to match, then amend if needed
+git push --follow-tags
+```
+
+The workflow verifies the tag matches `package.json` **and** `server.json`, runs typecheck + tests + build, then `npm publish --provenance --access public`, creates a GitHub Release with generated notes, and (if enabled) publishes to the MCP Registry.
+
 ## Notes
 
 - Registries generally require a **public GitHub repo** and (for run-from-npm) a **published npm package** — do step 1 first.
