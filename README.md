@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/dockndevai/mcp-kubernetes/actions/workflows/ci.yml/badge.svg)](https://github.com/dockndevai/mcp-kubernetes/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![npm](https://img.shields.io/npm/v/@dockndevai/mcp-kubernetes)](https://www.npmjs.com/package/@dockndevai/mcp-kubernetes)
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server for **Kubernetes**. It lets an MCP-capable client (Claude Desktop, Claude Code, etc.) inspect and operate Kubernetes clusters across multiple contexts — with behaviour controlled entirely by flags.
 
@@ -38,39 +39,75 @@ The layers are independent — e.g. `admin` mode with all three opt-ins `false` 
 
 **Admin** (`admin`): `delete_resource` (needs `K8S_ALLOW_DELETE`), `exec_in_pod` (needs `K8S_ALLOW_EXEC`)
 
-## Use with your MCP client
+## Quickstart — add to your agent
 
-Works with Claude Code, Claude Desktop, Cursor, OpenAI Codex CLI, Windsurf, VS Code (Copilot), and any other MCP client — see **[docs/CLIENTS.md](docs/CLIENTS.md)** for per-client setup.
+Published on npm as [`@dockndevai/mcp-kubernetes`](https://www.npmjs.com/package/@dockndevai/mcp-kubernetes). No clone or build needed — your MCP client runs it on demand with `npx`. **Start in `read-only` mode**; see [`.env.example`](.env.example) for every variable and [docs/CLIENTS.md](docs/CLIENTS.md) for the full per-client guide.
 
-## Install
+**Claude Code** (CLI)
 
 ```bash
-npm install
-npm run build
+claude mcp add kubernetes -e KUBECONFIG_PATH="/Users/you/.kube/config" -e K8S_MODE="read-only" -- npx -y @dockndevai/mcp-kubernetes
 ```
 
-## Run with Claude Desktop / Claude Code
-
-Add to your MCP client configuration:
+**Claude Desktop · Cursor · Windsurf** — same block in `claude_desktop_config.json`, `.cursor/mcp.json`, or `~/.codeium/windsurf/mcp_config.json`:
 
 ```json
 {
   "mcpServers": {
     "kubernetes": {
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-kubernetes/dist/index.js"],
+      "command": "npx",
+      "args": [
+        "-y",
+        "@dockndevai/mcp-kubernetes"
+      ],
       "env": {
         "KUBECONFIG_PATH": "/Users/you/.kube/config",
-        "K8S_MODE": "read-only",
-        "K8S_CONTEXT_ALLOWLIST": "staging",
-        "K8S_NAMESPACE_ALLOWLIST": "app,web"
+        "K8S_MODE": "read-only"
       }
     }
   }
 }
 ```
 
-Bump `K8S_MODE` to `read-write` for scaling/restarts, and to `admin` (plus the relevant `K8S_ALLOW_*` flag) only when you intend to allow deletes or exec.
+**OpenAI Codex CLI** — in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.kubernetes]
+command = "npx"
+args = ["-y", "@dockndevai/mcp-kubernetes"]
+env = { KUBECONFIG_PATH = "/Users/you/.kube/config", K8S_MODE = "read-only" }
+```
+
+**VS Code (GitHub Copilot, Agent mode)** — in `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "kubernetes": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@dockndevai/mcp-kubernetes"
+      ],
+      "env": {
+        "KUBECONFIG_PATH": "/Users/you/.kube/config",
+        "K8S_MODE": "read-only"
+      }
+    }
+  }
+}
+```
+
+## Run from source (development)
+
+Prefer the published package above. To run from a clone:
+
+```bash
+npm install
+npm run build
+node dist/index.js   # with the environment variables set
+```
 
 ## Develop
 
