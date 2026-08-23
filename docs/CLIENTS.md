@@ -3,7 +3,7 @@
 `mcp-kubernetes` is a **stdio** MCP server. Any MCP-compatible agent can run it. Two ways to launch it:
 
 - **From source (works today):** `node /ABSOLUTE/PATH/TO/mcp-kubernetes/dist/index.js` after `npm install && npm run build`.
-- **From npm (after it is published):** `npx -y mcp-kubernetes` — replace the `command`/`args` below with `"command": "npx", "args": ["-y", "mcp-kubernetes"]`.
+- **From npm (after it is published):** `npx -y @dockndevai/mcp-kubernetes` — replace the `command`/`args` below with `"command": "npx", "args": ["-y", "@dockndevai/mcp-kubernetes"]`.
 
 > Replace `/ABSOLUTE/PATH/TO/mcp-kubernetes` with the real absolute path on your machine, and set the environment variables for your cluster/instance. **Start in `read-only` mode** and raise it deliberately. See [`.env.example`](../.env.example) for every supported variable.
 

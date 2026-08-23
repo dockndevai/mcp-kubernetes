@@ -12,7 +12,7 @@
     {
       "registry_type": "npm",
       "registry_base_url": "https://registry.npmjs.org",
-      "identifier": "mcp-kubernetes",
+      "identifier": "@dockndevai/mcp-kubernetes",
       "version": "0.1.0",
       "transport": {
         "type": "stdio"

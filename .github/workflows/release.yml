@@ -61,7 +61,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             echo "Dry run — validating the package without publishing."
-            npm publish --dry-run
+            npm publish --dry-run --access public
           else
             npm publish --provenance --access public
           fi

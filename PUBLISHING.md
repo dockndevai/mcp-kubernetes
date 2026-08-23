@@ -16,7 +16,7 @@ npm login
 npm publish --access public   # prepublishOnly runs the build first
 ```
 
-`package.json` already declares `"mcpName": "io.github.dockndevai/mcp-kubernetes"`, which the official registry uses to verify npm ownership. After this, clients can run the server with `npx -y mcp-kubernetes` (no local clone needed).
+`package.json` already declares `"mcpName": "io.github.dockndevai/mcp-kubernetes"`, which the official registry uses to verify npm ownership. After this, clients can run the server with `npx -y @dockndevai/mcp-kubernetes` (no local clone needed).
 
 ## 2. Official MCP Registry (registry.modelcontextprotocol.io)
 
@@ -30,7 +30,7 @@ mcp-publisher publish             # reads ./server.json
 
 ## 3. Smithery (smithery.ai)
 
-Smithery indexes GitHub MCP servers and can host/run them. Connect the GitHub repo at smithery.ai, or add a `smithery.yaml` describing the stdio command. Because this is an npm stdio server, the runtime command is `npx -y mcp-kubernetes`.
+Smithery indexes GitHub MCP servers and can host/run them. Connect the GitHub repo at smithery.ai, or add a `smithery.yaml` describing the stdio command. Because this is an npm stdio server, the runtime command is `npx -y @dockndevai/mcp-kubernetes`.
 
 ## 4. Glama (glama.ai/mcp/servers)
 
