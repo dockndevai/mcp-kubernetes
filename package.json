@@ -6,12 +6,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ankitcs17071993/mcp-kubernetes.git"
+    "url": "git+https://github.com/dockndevai/mcp-kubernetes.git"
   },
   "bugs": {
-    "url": "https://github.com/ankitcs17071993/mcp-kubernetes/issues"
+    "url": "https://github.com/dockndevai/mcp-kubernetes/issues"
   },
-  "homepage": "https://github.com/ankitcs17071993/mcp-kubernetes#readme",
+  "homepage": "https://github.com/dockndevai/mcp-kubernetes#readme",
   "bin": {
     "mcp-kubernetes": "dist/index.js"
   },
