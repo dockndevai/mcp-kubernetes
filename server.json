@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.dockndevai/mcp-kubernetes",
+  "description": "Model Context Protocol server for Kubernetes — multi-cluster access with security modes and access-control flags.",
+  "status": "active",
+  "repository": {
+    "url": "https://github.com/dockndevai/mcp-kubernetes",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registry_type": "npm",
+      "registry_base_url": "https://registry.npmjs.org",
+      "identifier": "mcp-kubernetes",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "name": "KUBECONFIG_PATH",
+          "description": "Path to a kube-config file (empty = default resolution).",
+          "is_required": false,
+          "is_secret": false
+        },
+        {
+          "name": "K8S_MODE",
+          "description": "Access mode: read-only | read-write | admin.",
+          "is_required": false,
+          "is_secret": false
+        }
+      ]
+    }
+  ]
+}
