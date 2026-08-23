@@ -1,0 +1,22 @@
+name: Publish to MCP Registry
+
+# One-off / on-demand publish of server.json to registry.modelcontextprotocol.io.
+# Uses passwordless GitHub OIDC to prove ownership of the io.github.dockndevai namespace.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        run: curl -sSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar -xz mcp-publisher
+      - name: Log in with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+      - name: Publish server.json
+        run: ./mcp-publisher publish
