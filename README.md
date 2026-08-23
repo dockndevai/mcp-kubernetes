@@ -1,5 +1,8 @@
 # mcp-kubernetes
 
+[![CI](https://github.com/ankitcs17071993/mcp-kubernetes/actions/workflows/ci.yml/badge.svg)](https://github.com/ankitcs17071993/mcp-kubernetes/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+
 A [Model Context Protocol](https://modelcontextprotocol.io) server for **Kubernetes**. It lets an MCP-capable client (Claude Desktop, Claude Code, etc.) inspect and operate Kubernetes clusters across multiple contexts — with behaviour controlled entirely by flags.
 
 The design goal is **safe by default**: it starts read-only, can be scoped to an allowlist of namespaces and contexts, protects system namespaces from mutation, and gates the dangerous operations (delete, apply, exec) behind explicit opt-ins.

@@ -4,6 +4,14 @@
   "description": "Model Context Protocol server for Kubernetes — multi-cluster access with security modes and access-control flags.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ankitcs17071993/mcp-kubernetes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ankitcs17071993/mcp-kubernetes/issues"
+  },
+  "homepage": "https://github.com/ankitcs17071993/mcp-kubernetes#readme",
   "bin": {
     "mcp-kubernetes": "dist/index.js"
   },
