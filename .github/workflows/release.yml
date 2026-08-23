@@ -57,6 +57,9 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      - name: Security audit (fail on high/critical)
+        run: npm audit --audit-level=high
+
       - name: Publish to npm
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
