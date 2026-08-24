@@ -27,15 +27,23 @@ export class K8sClient {
 
   constructor(conn: KubeConnection) {
     this.base = new KubeConfig();
-    if (conn.inCluster) {
-      this.base.loadFromCluster();
-    } else if (conn.kubeconfigPath) {
-      this.base.loadFromFile(conn.kubeconfigPath);
-    } else {
-      this.base.loadFromDefault();
-    }
-    if (conn.defaultContext) {
-      this.base.setCurrentContext(conn.defaultContext);
+    // Loading is best-effort so the server can still start and advertise its
+    // tools (introspection) without a kube-config; tool calls then fail clearly.
+    try {
+      if (conn.inCluster) {
+        this.base.loadFromCluster();
+      } else if (conn.kubeconfigPath) {
+        this.base.loadFromFile(conn.kubeconfigPath);
+      } else {
+        this.base.loadFromDefault();
+      }
+      if (conn.defaultContext) {
+        this.base.setCurrentContext(conn.defaultContext);
+      }
+    } catch (err) {
+      process.stderr.write(
+        `[kubernetes-mcp] WARNING: could not load kube-config (${(err as Error).message}); tool calls will fail until a valid config is available.\n`,
+      );
     }
   }
 
