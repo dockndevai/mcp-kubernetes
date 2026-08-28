@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Keep npm dependencies patched; group everything into one weekly PR to reduce noise.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+  # Keep GitHub Actions pinned to current versions.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

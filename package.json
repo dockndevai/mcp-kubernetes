@@ -1,7 +1,7 @@
 {
   "name": "@dockndevai/mcp-kubernetes",
   "mcpName": "io.github.dockndevai/mcp-kubernetes",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Model Context Protocol server for Kubernetes — multi-cluster access with security modes and access-control flags.",
   "type": "module",
   "license": "MIT",
