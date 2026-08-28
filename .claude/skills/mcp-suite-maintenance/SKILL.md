@@ -50,6 +50,14 @@ Copy the smallest existing server (mcp-debezium is a good REST template; mcp-kaf
 - keep `security.ts` shape; rename the scoped resource (realm/namespace/topic/database/connector).
 - keep `read-only` the default, protected defaults sensible, deletes gated.
 - mirror the docs set: `README.md`, `SECURITY.md`, `.env.example`, `docs/CLIENTS.md`, `server.json`, CI, MIT `LICENSE`.
+- **protect `main`**: after creating the GitHub repo, add the shared `protect-main` ruleset on the default branch so force-pushes and branch deletion are blocked (no bypass), while direct pushes + tag releases keep working:
+  ```bash
+  gh api --method POST repos/dockndevai/<repo>/rulesets --input - <<'JSON'
+  { "name": "protect-main", "target": "branch", "enforcement": "active",
+    "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+    "rules": [ { "type": "deletion" }, { "type": "non_fast_forward" } ] }
+  JSON
+  ```
 
 ## Dependency & release maintenance
 
