@@ -16,7 +16,7 @@ export function buildServer(config: AppConfig): { server: McpServer; enabled: st
   const client = new K8sClient(config.connection);
   const ctx: ToolContext = { client, policy };
 
-  const server = new McpServer({ name: "mcp-kubernetes", version: "0.1.1" });
+  const server = new McpServer({ name: "mcp-kubernetes", version: "0.1.2" });
 
   const enabled: string[] = [];
   for (const tool of ALL_TOOLS) {
