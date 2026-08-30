@@ -1,6 +1,6 @@
 ---
 name: mcp-suite-maintenance
-description: Maintain and extend the dockndevai MCP server suite (mcp-keycloak, mcp-kubernetes, mcp-oci, mcp-kafka, mcp-clickhouse, mcp-debezium). Use when adding or changing a tool, touching the security/policy layer, bumping dependencies, cutting a release, or publishing to npm or an MCP registry — so the safe-by-default invariants and conventions are preserved.
+description: Maintain and extend the dockndevai MCP server suite (mcp-keycloak, mcp-kubernetes, mcp-oci, mcp-kafka, mcp-clickhouse, mcp-debezium, mcp-azure, mcp-azure-devops, mcp-percona-pg). Use when adding or changing a tool, touching the security/policy layer, bumping dependencies, cutting a release, or publishing to npm or an MCP registry — so the safe-by-default invariants and conventions are preserved.
 ---
 
 # Maintaining the MCP server suite
@@ -50,6 +50,7 @@ Copy the smallest existing server (mcp-debezium is a good REST template; mcp-kaf
 - keep `security.ts` shape; rename the scoped resource (realm/namespace/topic/database/connector).
 - keep `read-only` the default, protected defaults sensible, deletes gated.
 - mirror the docs set: `README.md`, `SECURITY.md`, `.env.example`, `docs/CLIENTS.md`, `server.json`, CI, MIT `LICENSE`.
+- add **`glama.json`** at the repo root (`{ "$schema": "https://glama.ai/mcp/schemas/server.json", "maintainers": ["dockndevai"] }`) so Glama can verify authorship; add the score badge later once graded.
 - **protect `main`**: after creating the GitHub repo, add the shared `protect-main` ruleset on the default branch so force-pushes and branch deletion are blocked (no bypass), while direct pushes + tag releases keep working:
   ```bash
   gh api --method POST repos/dockndevai/<repo>/rulesets --input - <<'JSON'
