@@ -27,7 +27,7 @@ export const adminTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy }) => {
+    handler: async (args, { client, policy, confirm }) => {
       const namespace = args.namespace as string | undefined;
       const context = args.context as string | undefined;
       const { dryRun } = policy.guard({
@@ -39,6 +39,8 @@ export const adminTools: ToolDef[] = [
       });
       const ref = `${args.kind}/${args.name}${namespace ? ` in ${namespace}` : ""}`;
       if (dryRun) return textResult(`[dry-run] Would delete ${ref}.`);
+      const ok = await confirm.confirm({ action: "delete resource", target: ref, details: { context } });
+      if (!ok.approved) return textResult(`Deletion cancelled — ${ok.reason}.`);
       await client.deleteObject(
         args.apiVersion as string,
         args.kind as string,
@@ -67,7 +69,7 @@ export const adminTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy }) => {
+    handler: async (args, { client, policy, confirm }) => {
       const namespace = args.namespace as string;
       const context = args.context as string | undefined;
       const { dryRun } = policy.guard({
@@ -82,6 +84,12 @@ export const adminTools: ToolDef[] = [
         return textResult(
           `[dry-run] Would exec in ${namespace}/${args.name} [${args.container}]: ${command.join(" ")}`,
         );
+      const ok = await confirm.confirm({
+        action: "exec command in pod",
+        target: `${namespace}/${args.name} [${args.container}]`,
+        details: { command: command.join(" ") },
+      });
+      if (!ok.approved) return textResult(`Exec cancelled — ${ok.reason}.`);
       const result = await client.execInPod(
         args.name as string,
         namespace,

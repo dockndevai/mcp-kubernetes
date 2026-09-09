@@ -1,10 +1,13 @@
 import type { ZodRawShape } from "zod";
+import type { Confirmer } from "../elicit.js";
 import type { K8sClient } from "../k8s/client.js";
 import type { Capability, SecurityPolicy } from "../security.js";
 
 export interface ToolContext {
   client: K8sClient;
   policy: SecurityPolicy;
+  /** Human-in-the-loop confirmation for destructive ops (no-op fallback when the client can't elicit). */
+  confirm: Confirmer;
 }
 
 export interface ToolResult {

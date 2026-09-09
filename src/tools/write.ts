@@ -125,7 +125,7 @@ export const writeTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy }) => {
+    handler: async (args, { client, policy, confirm }) => {
       const manifest = args.manifest as KubernetesObject & { kind?: string };
       const namespace = manifest.metadata?.namespace;
       const context = args.context as string | undefined;
@@ -144,6 +144,12 @@ export const writeTools: ToolDef[] = [
           `[dry-run] Would apply ${manifest.kind}/${manifest.metadata.name}` +
             `${namespace ? ` in ${namespace}` : ""}.`,
         );
+      const ok = await confirm.confirm({
+        action: "apply manifest (create or replace)",
+        target: `${manifest.kind}/${manifest.metadata.name}${namespace ? ` in ${namespace}` : ""}`,
+        details: { context },
+      });
+      if (!ok.approved) return textResult(`Apply cancelled — ${ok.reason}.`);
       const { action } = await client.applyObject(manifest, context);
       return jsonResult({ applied: true, action, kind: manifest.kind, name: manifest.metadata.name, namespace });
     },
