@@ -120,7 +120,7 @@ export const writeTools: ToolDef[] = [
         "Pass the manifest as a JSON object with apiVersion, kind, metadata, and spec.",
       inputSchema: {
         manifest: z
-          .record(z.any())
+          .record(z.string(), z.any())
           .describe("The Kubernetes object as JSON (apiVersion, kind, metadata, spec, ...)"),
         ...contextArg,
       },
