@@ -28,6 +28,7 @@ The design goal is **safe by default**: it starts read-only, can be scoped to an
 | Can it exec into pods? | `K8S_ALLOW_EXEC` | `false` | `exec_in_pod` needs this **and** admin mode; the tool isn't even registered otherwise. |
 | Preview without touching the cluster | `K8S_DRY_RUN` | `false` | Write/admin tools validate + log intent, then return without calling the API. |
 | Audit trail | `K8S_AUDIT_LOG` | `true` | Emits a JSON line to stderr per guarded operation (`ALLOW` / `DENY` / `DRY_RUN`). |
+| Interactive confirmation | *(automatic)* | — | Destructive & high-impact actions prompt the human to approve via MCP elicitation before running; clients without elicitation fall back to the `*_ALLOW_*` gate. |
 
 The layers are independent — e.g. `admin` mode with all three opt-ins `false` can restart and scale deployments but can neither delete resources nor exec into pods.
 

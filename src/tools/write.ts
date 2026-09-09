@@ -21,13 +21,18 @@ export const writeTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy }) => {
+    handler: async (args, { client, policy, confirm }) => {
       const name = args.name as string;
       const namespace = args.namespace as string;
       const replicas = args.replicas as number;
       const context = args.context as string | undefined;
       const { dryRun } = policy.guard({ tool: "scale_deployment", capability: "write", namespace, context });
       if (dryRun) return textResult(`[dry-run] Would scale ${namespace}/${name} to ${replicas} replicas.`);
+      // Scaling to zero takes the workload offline — confirm that specifically.
+      if (replicas === 0) {
+        const ok = await confirm.confirm({ action: "scale deployment to 0 (takes it offline)", target: `${namespace}/${name}`, details: { context } });
+        if (!ok.approved) return textResult(`Scale cancelled — ${ok.reason}.`);
+      }
       await client.scaleDeployment(name, namespace, replicas, context);
       return jsonResult({ scaled: true, namespace, name, replicas });
     },

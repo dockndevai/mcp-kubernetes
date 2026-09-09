@@ -15,7 +15,7 @@ export const ALL_TOOLS: ToolDef[] = [...readTools, ...writeTools, ...adminTools]
 export function buildServer(config: AppConfig): { server: McpServer; enabled: string[] } {
   const policy = new SecurityPolicy(config.security);
   const client = new K8sClient(config.connection);
-  const server = new McpServer({ name: "mcp-kubernetes", version: "0.2.0" });
+  const server = new McpServer({ name: "mcp-kubernetes", version: "0.2.1" });
   const ctx: ToolContext = { client, policy, confirm: makeConfirmer(server) };
 
   const enabled: string[] = [];
