@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-09-27
+
+### Added
+- **Optional AI risk guard (laya-guard).** `delete_resource`, `exec_in_pod` and `apply_manifest` can
+  consult a local [laya-guard](https://github.com/dockndevai/laya-guard) daemon that classifies the
+  operation allow / confirm / block before it runs. Runs *after* the delete/exec/apply gates and can
+  only *tighten*, never grant; fails closed. Off by default (`K8S_GUARD_MODE=monitor|enforce`).
+
 ## [0.2.2] - 2026-09-12
 
 ### Changed

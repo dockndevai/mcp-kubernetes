@@ -27,7 +27,7 @@ export const adminTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy, confirm }) => {
+    handler: async (args, { client, policy, confirm, guard }) => {
       const namespace = args.namespace as string | undefined;
       const context = args.context as string | undefined;
       const { dryRun } = policy.guard({
@@ -39,6 +39,10 @@ export const adminTools: ToolDef[] = [
       });
       const ref = `${args.kind}/${args.name}${namespace ? ` in ${namespace}` : ""}`;
       if (dryRun) return textResult(`[dry-run] Would delete ${ref}.`);
+      await guard.enforce(
+        { tool: "delete_resource", command: `kubectl delete ${args.kind}/${args.name}${namespace ? ` -n ${namespace}` : ""}`, context: ref },
+        confirm,
+      );
       const ok = await confirm.confirm({ action: "delete resource", target: ref, details: { context } });
       if (!ok.approved) return textResult(`Deletion cancelled — ${ok.reason}.`);
       await client.deleteObject(
@@ -69,7 +73,7 @@ export const adminTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy, confirm }) => {
+    handler: async (args, { client, policy, confirm, guard }) => {
       const namespace = args.namespace as string;
       const context = args.context as string | undefined;
       const { dryRun } = policy.guard({
@@ -84,6 +88,10 @@ export const adminTools: ToolDef[] = [
         return textResult(
           `[dry-run] Would exec in ${namespace}/${args.name} [${args.container}]: ${command.join(" ")}`,
         );
+      await guard.enforce(
+        { tool: "exec_in_pod", command: command.join(" "), context: `exec in pod ${namespace}/${args.name} [${args.container}]` },
+        confirm,
+      );
       const ok = await confirm.confirm({
         action: "exec command in pod",
         target: `${namespace}/${args.name} [${args.container}]`,

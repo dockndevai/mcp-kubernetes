@@ -40,6 +40,8 @@ The layers are independent — e.g. `admin` mode with all three opt-ins `false` 
 
 **Admin** (`admin`): `delete_resource` (needs `K8S_ALLOW_DELETE`), `exec_in_pod` (needs `K8S_ALLOW_EXEC`)
 
+**Optional AI risk guard.** Set `K8S_GUARD_MODE=monitor|enforce` to have `delete_resource`, `exec_in_pod` and `apply_manifest` consult a local [laya-guard](https://github.com/dockndevai/laya-guard) daemon (`pipx install laya-guard && laya-guard`) that classifies the operation allow/confirm/block before it runs. Runs *after* the delete/exec/apply gates; only tightens, never grants; fails closed.
+
 ## Quickstart — add to your agent
 
 Published on npm as [`@dockndevai/mcp-kubernetes`](https://www.npmjs.com/package/@dockndevai/mcp-kubernetes). No clone or build needed — your MCP client runs it on demand with `npx`. **Start in `read-only` mode**; see [`.env.example`](.env.example) for every variable and [docs/CLIENTS.md](docs/CLIENTS.md) for the full per-client guide.

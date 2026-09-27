@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AppConfig } from "./config.js";
 import { K8sClient } from "./k8s/client.js";
 import { makeConfirmer } from "./elicit.js";
+import { GuardClient, loadGuardConfig } from "./guard.js";
 import { PolicyError, SecurityPolicy } from "./security.js";
 import { adminTools } from "./tools/admin.js";
 import { readTools } from "./tools/read.js";
@@ -15,8 +16,9 @@ export const ALL_TOOLS: ToolDef[] = [...readTools, ...writeTools, ...adminTools]
 export function buildServer(config: AppConfig): { server: McpServer; enabled: string[] } {
   const policy = new SecurityPolicy(config.security);
   const client = new K8sClient(config.connection);
-  const server = new McpServer({ name: "mcp-kubernetes", version: "0.2.2" });
-  const ctx: ToolContext = { client, policy, confirm: makeConfirmer(server) };
+  const server = new McpServer({ name: "mcp-kubernetes", version: "0.3.0" });
+  const guard = new GuardClient(loadGuardConfig());
+  const ctx: ToolContext = { client, policy, confirm: makeConfirmer(server), guard };
 
   const enabled: string[] = [];
   for (const tool of ALL_TOOLS) {

@@ -130,7 +130,7 @@ export const writeTools: ToolDef[] = [
         ...contextArg,
       },
     },
-    handler: async (args, { client, policy, confirm }) => {
+    handler: async (args, { client, policy, confirm, guard }) => {
       const manifest = args.manifest as KubernetesObject & { kind?: string };
       const namespace = manifest.metadata?.namespace;
       const context = args.context as string | undefined;
@@ -149,6 +149,10 @@ export const writeTools: ToolDef[] = [
           `[dry-run] Would apply ${manifest.kind}/${manifest.metadata.name}` +
             `${namespace ? ` in ${namespace}` : ""}.`,
         );
+      await guard.enforce(
+        { tool: "apply_manifest", command: `kubectl apply ${manifest.kind}/${manifest.metadata.name} -n ${namespace ?? "default"}`, context: `${manifest.kind}/${manifest.metadata.name}` },
+        confirm,
+      );
       const ok = await confirm.confirm({
         action: "apply manifest (create or replace)",
         target: `${manifest.kind}/${manifest.metadata.name}${namespace ? ` in ${namespace}` : ""}`,
