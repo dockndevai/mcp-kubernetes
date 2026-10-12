@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolDef } from "./types.js";
-import { jsonResult, summarizePods } from "./types.js";
+import { jsonResult, redactIfSecret, summarizePods } from "./types.js";
 
 const contextArg = {
   context: z.string().optional().describe("kube-config context to target (defaults to current-context)"),
@@ -230,7 +230,62 @@ export const readTools: ToolDef[] = [
         namespace,
         context,
       );
-      return jsonResult(res);
+      return jsonResult(redactIfSecret(args.kind as string, res as Record<string, unknown>));
+    },
+  },
+  {
+    name: "list_resources",
+    capability: "read",
+    config: {
+      title: "List resources of any kind",
+      description:
+        "List arbitrary Kubernetes objects by apiVersion/kind (e.g. apiVersion=batch/v1, kind=CronJob). " +
+        "Covers kinds without a dedicated list_* tool — Jobs, CronJobs, StatefulSets, DaemonSets, ConfigMaps, " +
+        "PersistentVolumeClaims, Ingresses, NetworkPolicies, custom resources, etc. Omit namespace to list a " +
+        "namespaced kind across every namespace in the allowlist (results outside it are filtered out). " +
+        "Secret `data`/`stringData` values are always redacted.",
+      inputSchema: {
+        apiVersion: z.string().describe("e.g. v1, apps/v1, batch/v1, networking.k8s.io/v1"),
+        kind: z.string().describe("e.g. Job, CronJob, StatefulSet, ConfigMap, Ingress, PersistentVolumeClaim"),
+        namespace: z
+          .string()
+          .optional()
+          .describe(
+            "Namespace to list in. Omit for cluster-scoped kinds, or to list a namespaced kind across " +
+              "all namespaces allowed by K8S_NAMESPACE_ALLOWLIST.",
+          ),
+        labelSelector: z.string().optional().describe("Kubernetes label selector, e.g. app=foo,tier=backend"),
+        fieldSelector: z.string().optional().describe("Kubernetes field selector, e.g. status.phase=Running"),
+        limit: z.number().int().min(1).max(500).optional().describe("Max items to return (default 200)"),
+        ...contextArg,
+      },
+    },
+    handler: async (args, { client, policy }) => {
+      const namespace = args.namespace as string | undefined;
+      const context = args.context as string | undefined;
+      const kind = args.kind as string;
+      policy.guard({ tool: "list_resources", capability: "read", namespace, context });
+      const res = await client.listObjects(
+        args.apiVersion as string,
+        kind,
+        namespace,
+        {
+          labelSelector: args.labelSelector as string | undefined,
+          fieldSelector: args.fieldSelector as string | undefined,
+          limit: (args.limit as number | undefined) ?? 200,
+        },
+        context,
+      );
+      // Defence in depth: when `namespace` is omitted the underlying API can return
+      // objects across every namespace, so re-apply the allowlist client-side. Items
+      // with no namespace (cluster-scoped kinds) always pass through.
+      const items = (res.items ?? [])
+        .filter((item) => {
+          const ns = (item as { metadata?: { namespace?: string } }).metadata?.namespace;
+          return ns === undefined || policy.isNamespaceAllowed(ns);
+        })
+        .map((item) => redactIfSecret(kind, item as Record<string, unknown>));
+      return jsonResult(items);
     },
   },
 ];

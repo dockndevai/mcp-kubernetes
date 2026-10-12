@@ -137,6 +137,31 @@ export class K8sClient {
     return this.objects(context).read({ apiVersion, kind, metadata: { name, namespace } });
   }
 
+  /**
+   * List arbitrary Kubernetes objects by apiVersion/kind. Omitting `namespace` for a
+   * namespaced kind lists across all namespaces — callers must filter the result against
+   * the namespace allowlist themselves (the K8s API has no "allowed namespaces" concept).
+   */
+  listObjects(
+    apiVersion: string,
+    kind: string,
+    namespace: string | undefined,
+    opts: { labelSelector?: string; fieldSelector?: string; limit?: number },
+    context?: string,
+  ) {
+    return this.objects(context).list(
+      apiVersion,
+      kind,
+      namespace,
+      undefined,
+      undefined,
+      undefined,
+      opts.fieldSelector,
+      opts.labelSelector,
+      opts.limit,
+    );
+  }
+
   // --- Writes ----------------------------------------------------------------
 
   async scaleDeployment(name: string, namespace: string, replicas: number, context?: string) {

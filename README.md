@@ -34,7 +34,7 @@ The layers are independent — e.g. `admin` mode with all three opt-ins `false` 
 
 ## Tools
 
-**Read** (`read-only`+): `list_contexts`, `list_namespaces`, `list_pods`, `get_pod`, `get_pod_logs`, `list_deployments`, `list_services`, `list_nodes`, `list_events`, `get_resource`
+**Read** (`read-only`+): `list_contexts`, `list_namespaces`, `list_pods`, `get_pod`, `get_pod_logs`, `list_deployments`, `list_services`, `list_nodes`, `list_events`, `get_resource`, `list_resources`
 
 **Write** (`read-write`+): `scale_deployment`, `restart_deployment`, `set_deployment_image`, `create_namespace`, `apply_manifest` (needs `K8S_ALLOW_APPLY`)
 

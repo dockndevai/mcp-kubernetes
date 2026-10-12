@@ -45,6 +45,30 @@ export function textResult(text: string): ToolResult {
   return { content: [{ type: "text", text }] };
 }
 
+/** Kubernetes `kind` values whose `data`/`stringData` fields can carry credentials. */
+const SECRET_KINDS = new Set(["secret", "secrets"]);
+
+/**
+ * Strip credential values out of a Secret object before it reaches the model, while
+ * keeping key names visible (useful for "what keys does this secret have"). No-op for
+ * any other kind. Applied to every generic resource read/list (`get_resource`,
+ * `list_resources`) since those can fetch arbitrary kinds, including Secrets.
+ */
+export function redactIfSecret<T extends Record<string, unknown>>(kind: string, obj: T): T {
+  if (!SECRET_KINDS.has(kind.toLowerCase())) return obj;
+  const { data, stringData, ...rest } = obj as Record<string, unknown> & {
+    data?: Record<string, unknown>;
+    stringData?: Record<string, unknown>;
+  };
+  const redactKeys = (fields?: Record<string, unknown>) =>
+    fields ? Object.fromEntries(Object.keys(fields).map((k) => [k, "***redacted***"])) : undefined;
+  return {
+    ...rest,
+    ...(data !== undefined ? { data: redactKeys(data) } : {}),
+    ...(stringData !== undefined ? { stringData: redactKeys(stringData) } : {}),
+  } as T;
+}
+
 /** Trim large list responses to the essential, model-friendly fields. */
 export function summarizePods(list: { items?: Array<Record<string, any>> }) {
   return (list.items ?? []).map((p) => ({

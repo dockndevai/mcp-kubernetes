@@ -48,6 +48,19 @@ describe("namespace allowlist", () => {
     );
     expect(() => p.guard({ tool: "list_pods", capability: "read", namespace: "app" })).not.toThrow();
   });
+
+  it("applies the same allowlist gate to list_resources (generic kind listing)", () => {
+    const p = makePolicy({ namespaceAllowlist: ["app"] });
+    expect(() => p.guard({ tool: "list_resources", capability: "read", namespace: "other" })).toThrow(
+      /allowlist/,
+    );
+    expect(() => p.guard({ tool: "list_resources", capability: "read", namespace: "app" })).not.toThrow();
+    // Cluster-wide listing (namespace omitted) isn't blocked by guard() itself — the
+    // handler re-filters returned items against isNamespaceAllowed() client-side.
+    expect(() => p.guard({ tool: "list_resources", capability: "read" })).not.toThrow();
+    expect(p.isNamespaceAllowed("other")).toBe(false);
+    expect(p.isNamespaceAllowed("app")).toBe(true);
+  });
 });
 
 describe("protected namespaces", () => {
