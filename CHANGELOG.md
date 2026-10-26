@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-10-26
+
+### Changed
+- Routine dependency/security maintenance. `npm audit --audit-level=high` reported 2 high and
+  2 moderate advisories (transitive `body-parser`, `fast-uri`, `hono`, `undici`), all resolved
+  via `npm audit fix` with no direct dependency changes; `npm audit` now reports 0 vulnerabilities.
+- Took safe in-range patch bumps: `@kubernetes/client-node` ^2.0.0 2.0.0 → 2.0.1,
+  `@modelcontextprotocol/sdk` ^1.30.0 1.32.1 → 1.32.2.
+- No direct dependency crossed a major version boundary; `npm run typecheck`, `npm run build`,
+  and `npm test` all pass; final `npm audit` is clean.
+
 ## [0.3.2] - 2026-10-19
 
 ### Changed
