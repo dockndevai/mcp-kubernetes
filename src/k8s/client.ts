@@ -15,6 +15,7 @@ import {
 /** The subset of a KubernetesObject the object API needs to identify it. */
 type ObjectHeader = { apiVersion: string; kind: string; metadata: { name: string; namespace?: string } };
 import type { KubeConnection } from "../config.js";
+import { redactList, redactSecret } from "./redact.js";
 
 export interface ExecResult {
   stdout: string;
@@ -127,14 +128,37 @@ export class K8sClient {
     return this.core(context).listNamespacedEvent({ namespace });
   }
 
-  getObject(
+  async getObject(
     apiVersion: string,
     kind: string,
     name: string,
     namespace: string | undefined,
     context?: string,
   ) {
-    return this.objects(context).read({ apiVersion, kind, metadata: { name, namespace } });
+    const obj = await this.objects(context).read({ apiVersion, kind, metadata: { name, namespace } });
+    return redactSecret(obj as unknown as { kind?: string; data?: Record<string, unknown> });
+  }
+
+  /** List any Kubernetes resource kind (core, apps, batch, networking, CRDs, …), optionally scoped. */
+  async listObjects(
+    apiVersion: string,
+    kind: string,
+    namespace: string | undefined,
+    opts: { labelSelector?: string; limit?: number } = {},
+    context?: string,
+  ) {
+    const list = await this.objects(context).list(
+      apiVersion,
+      kind,
+      namespace,
+      undefined, // pretty
+      undefined, // exact
+      undefined, // exportt
+      undefined, // fieldSelector
+      opts.labelSelector,
+      opts.limit,
+    );
+    return redactList(list as unknown as { items?: Array<{ kind?: string; data?: Record<string, unknown> }> });
   }
 
   // --- Writes ----------------------------------------------------------------

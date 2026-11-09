@@ -34,7 +34,9 @@ The layers are independent — e.g. `admin` mode with all three opt-ins `false` 
 
 ## Tools
 
-**Read** (`read-only`+): `list_contexts`, `list_namespaces`, `list_pods`, `get_pod`, `get_pod_logs`, `list_deployments`, `list_services`, `list_nodes`, `list_events`, `get_resource`
+**Read** (`read-only`+): `list_contexts`, `list_namespaces`, `list_pods`, `get_pod`, `get_pod_logs`, `list_deployments`, `list_services`, `list_nodes`, `list_events`, `get_resource`, `list_resources`
+
+`list_resources` lists objects of any apiVersion/kind the cluster serves (ConfigMaps, StatefulSets, DaemonSets, Jobs/CronJobs, Ingresses, PVCs, CRDs, …) — not just the kinds with a dedicated `list_*` tool — optionally scoped to a namespace and filtered by a label selector. Like `get_resource`, Secret `data` values are redacted (keys and sizes only) and `K8S_NAMESPACE_ALLOWLIST` is enforced even when no namespace is given.
 
 **Write** (`read-write`+): `scale_deployment`, `restart_deployment`, `set_deployment_image`, `create_namespace`, `apply_manifest` (needs `K8S_ALLOW_APPLY`)
 
