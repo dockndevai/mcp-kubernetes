@@ -8,6 +8,8 @@
  * Pure logic, no I/O, so it is fully unit-testable.
  */
 
+import { redactLogText } from "./redact.js";
+
 export type Capability = "read" | "write" | "admin";
 export type AccessMode = "read-only" | "read-write" | "admin";
 
@@ -44,6 +46,11 @@ export interface SecurityConfig {
   auditLog: boolean;
   /** Refuse destructive ops that no human can approve (no elicitation support) instead of trusting the flags alone. */
   requireHumanApproval: boolean;
+  /**
+   * Mask credential-shaped text in pod logs and exec output before it is returned (best effort, see src/redact.ts). On unless this is
+   * explicitly `false`; `K8S_REDACT_LOGS=false` turns it off.
+   */
+  redactLogs?: boolean;
 }
 
 export class PolicyError extends Error {
@@ -94,6 +101,11 @@ export class SecurityPolicy {
   /** Whether the exec tool should even be registered. */
   get execEnabled(): boolean {
     return this.isCapabilityEnabled("admin") && this.config.allowExec;
+  }
+
+  /** Applies the log-redaction setting to text a workload wrote (pod logs, exec output). */
+  redactLogOutput(text: string): string {
+    return this.config.redactLogs === false ? text : redactLogText(text);
   }
 
   guard(ctx: GuardContext): { dryRun: boolean } {

@@ -21,6 +21,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   kube-config context's default namespace, which is where the request actually lands.
 - **`get_resource` no longer returns Secret values.** `data` and `stringData` are replaced with
   `<redacted, N bytes>` (keys kept) and the `last-applied-configuration` annotation is redacted.
+- **Pod logs and exec output are redacted (best effort).** `get_pod_logs` and the stdout/stderr of `exec_in_pod`
+  returned whatever the workload wrote, so a credential it logged reached the model. They now pass through a
+  line-oriented, linear-time redactor (`src/redact.ts`) that masks PEM private keys, values of keys ending in
+  `password`/`secret`/`token`/`api_key`/... (including `Authorization: Bearer ...`), `Bearer` tokens, passwords in
+  `scheme://user:pass@host` URLs, and well-known token shapes (JWTs / service-account tokens, AWS access key ids,
+  GCP, GitHub, GitLab, Slack, Stripe, npm, Vault, SendGrid). On by default; `K8S_REDACT_LOGS=false` disables it.
+  Heuristic defence in depth, not a guarantee: a bare random secret with no known shape or key name is not
+  caught. See SECURITY.md for the full list and trade-offs.
 - `apiVersion` in `get_resource` / `delete_resource` / `apply_manifest` is validated (`v1` or `<group>/<version>`)
   before it is used to build a request.
 
