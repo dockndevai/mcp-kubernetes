@@ -261,3 +261,48 @@ describe("typed confirmation", () => {
     expect(out.approved).toBe(true);
   });
 });
+
+describe("the prompt is fully reviewable", () => {
+  const bound = (elicit: ReturnType<typeof vi.fn>) =>
+    makeConfirmer(stubServer({ elicitation: HUMAN, elicit }), { audit: false });
+  const ok = () => vi.fn(async () => ({ action: "accept", content: { confirm: true } }));
+  const messageOf = (elicit: ReturnType<typeof vi.fn>) => ((elicit.mock.calls[0] as unknown[])[0] as { message: string }).message;
+
+  it("shows long arguments IN FULL, so a padded prefix cannot hide the tail", async () => {
+    const sql = `/* ${"x".repeat(5000)} */ DROP TABLE prod.users`;
+    const elicit = ok();
+    await bound(elicit).forCall("execute", { sql }).confirm({ action: "run sql", target: "prod.users" });
+    expect(messageOf(elicit)).toContain("DROP TABLE prod.users");
+  });
+
+  it("REFUSES an action whose arguments are too long to review, instead of approving a prefix", async () => {
+    const elicit = ok();
+    const out = await bound(elicit).forCall("execute", { sql: "x".repeat(20_000) }).confirm({ action: "run sql", target: "t" });
+    expect(out.approved).toBe(false);
+    expect(out.approved === false && out.reason).toMatch(/too long to review/);
+    expect(elicit).not.toHaveBeenCalled();
+  });
+
+  it("summarises over-long args only when the tool says they are an unreadable payload", async () => {
+    const elicit = ok();
+    const out = await bound(elicit)
+      .forCall("upload", { path: "a.bin", content: "A".repeat(20_000) })
+      .confirm({ action: "upload", target: "a.bin", summarizeLargeArgs: true });
+    expect(out.approved).toBe(true);
+    expect(messageOf(elicit)).toContain("not shown; covered by the fingerprint");
+    expect(messageOf(elicit).length).toBeLessThan(4000);
+  });
+});
+
+describe("secret-key matching is anchored to words", () => {
+  it("redacts real secrets in any casing/shape", () => {
+    for (const k of ["password", "passwordHash", "accessToken", "x-api-key", "apiKey", "client_secret", "refresh_token", "privateKey", "Authorization", "passcode"]) {
+      expect(canonicalArgs({ [k]: "v" }), k).toContain("[redacted]");
+    }
+  });
+  it("does not hide ordinary arguments that merely contain a secret-looking substring", () => {
+    for (const k of ["bypass", "bypass_cache", "compass", "tokenizer", "keyword", "passed", "passenger", "subject"]) {
+      expect(canonicalArgs({ [k]: "v" }), k).not.toContain("[redacted]");
+    }
+  });
+});

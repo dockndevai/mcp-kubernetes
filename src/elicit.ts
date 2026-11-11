@@ -36,6 +36,12 @@ export interface ConfirmRequest {
   probe?: () => Promise<string | undefined>;
   /** Also require the human to type the target name — for the highest-impact deletes. */
   typed?: boolean;
+  /**
+   * The arguments carry a payload no human can read anyway (file contents, base64, …). Only then may
+   * an over-long argument set be summarised in the prompt (first 1500 chars + length) and approved
+   * by fingerprint; otherwise an action too long to review is refused.
+   */
+  summarizeLargeArgs?: boolean;
 }
 
 /** What was approved, and by whom — logged so an operator can prove the exact action. */
@@ -70,9 +76,16 @@ export interface ConfirmerOptions {
   approvalTimeoutMs?: number;
 }
 
-const SECRET_KEY = /pass(word|wd)?|secret|token|api[-_]?key|credential|authorization|private[-_]?key|bearer|cookie/i;
+// Matched against the key split into words (camelCase → snake_case first), so `accessToken`, `passwordHash`
+// and `x-api-key` are secrets but `bypass`, `tokenizer` and `keyword` are not.
+const SECRET_KEY =
+  /(^|[^a-z])(pass(code|word|wd|phrase)?|secret|tokens?|credentials?|authorization|bearer|cookie|api[-_]?key|private[-_]?key|access[-_]?key|session[-_]?key)([^a-z]|$)/;
+const isSecretKey = (key: string): boolean => SECRET_KEY.test(key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase());
 const MAX_DEPTH = 8;
-const MAX_DISPLAY = 1500;
+/** Arguments up to this size are shown to the human in full; beyond it the action is too long to review. */
+const MAX_REVIEW = 16_000;
+/** With `summarizeLargeArgs`, how much of an over-long argument set is shown. */
+const MAX_SUMMARY = 1500;
 const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Deterministic JSON: sorted keys, secret-looking keys redacted, bigint stringified. */
@@ -86,7 +99,7 @@ function stable(value: unknown, depth = 0): unknown {
   for (const k of Object.keys(value as Record<string, unknown>).sort()) {
     const v = (value as Record<string, unknown>)[k];
     if (v === undefined) continue;
-    out[k] = SECRET_KEY.test(k) ? "[redacted]" : stable(v, depth + 1);
+    out[k] = isSecretKey(k) ? "[redacted]" : stable(v, depth + 1);
   }
   return out;
 }
@@ -160,7 +173,14 @@ export function makeConfirmer(server: McpServer, options: ConfirmerOptions = {})
       if (call) lines.push(`  • tool: ${call.tool}`);
       if (call) {
         const shown = canonicalArgs(call.args);
-        lines.push(`  • arguments: ${shown.length > MAX_DISPLAY ? `${shown.slice(0, MAX_DISPLAY)}… (+${shown.length - MAX_DISPLAY} chars)` : shown}`);
+        if (shown.length > MAX_REVIEW && !req.summarizeLargeArgs) {
+          // A human cannot meaningfully approve what they cannot read; never show a prefix and approve the rest.
+          return refuse(`the action's arguments are too long to review in an approval prompt (${shown.length} chars, limit ${MAX_REVIEW}); shorten them`);
+        }
+        const truncated = shown.length > MAX_REVIEW;
+        lines.push(
+          `  • arguments: ${truncated ? `${shown.slice(0, MAX_SUMMARY)}… (+${shown.length - MAX_SUMMARY} chars not shown; covered by the fingerprint)` : shown}`,
+        );
       }
       for (const [k, v] of Object.entries(details ?? {})) {
         if (v !== undefined && v !== "") lines.push(`  • ${k}: ${v}`);
