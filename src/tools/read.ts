@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { ToolDef } from "./types.js";
-import { jsonResult, summarizePods } from "./types.js";
+import { filterNamespaceAllowed, jsonResult, summarizePods } from "./types.js";
 
 const contextArg = {
   context: z.string().optional().describe("kube-config context to target (defaults to current-context)"),
@@ -210,7 +210,8 @@ export const readTools: ToolDef[] = [
     config: {
       title: "Get any resource",
       description:
-        "Read an arbitrary Kubernetes object by apiVersion/kind/name (e.g. apiVersion=apps/v1, kind=Deployment).",
+        "Read an arbitrary Kubernetes object by apiVersion/kind/name (e.g. apiVersion=apps/v1, kind=Deployment). " +
+        "Secret `data` values are redacted (keys and sizes are kept).",
       inputSchema: {
         apiVersion: z.string().describe("e.g. v1, apps/v1, networking.k8s.io/v1"),
         kind: z.string().describe("e.g. Pod, Deployment, Ingress"),
@@ -231,6 +232,47 @@ export const readTools: ToolDef[] = [
         context,
       );
       return jsonResult(res);
+    },
+  },
+  {
+    name: "list_resources",
+    capability: "read",
+    config: {
+      title: "List any resources",
+      description:
+        "List Kubernetes objects of an arbitrary apiVersion/kind (e.g. apiVersion=v1, kind=ConfigMap; " +
+        "apiVersion=networking.k8s.io/v1, kind=Ingress; apiVersion=batch/v1, kind=CronJob), optionally scoped to a " +
+        "namespace and filtered by a label selector. Covers any kind the cluster serves — core, apps, batch, " +
+        "networking, storage or a CRD — not just the kinds with a dedicated list_* tool. Secret `data` values are " +
+        "redacted (keys and sizes are kept). Results outside K8S_NAMESPACE_ALLOWLIST are dropped even when no " +
+        "namespace is given.",
+      inputSchema: {
+        apiVersion: z.string().describe("e.g. v1, apps/v1, batch/v1, networking.k8s.io/v1"),
+        kind: z.string().describe("e.g. ConfigMap, Secret, StatefulSet, DaemonSet, Job, CronJob, Ingress, PersistentVolumeClaim"),
+        namespace: z.string().optional().describe("Namespace (omit for cluster-scoped kinds, or to list across the allowed namespaces)"),
+        labelSelector: z.string().optional().describe("Label selector, e.g. app=web,tier!=cache"),
+        limit: z.number().int().min(1).max(500).optional().describe("Maximum items to return (default: server default page size)"),
+        ...contextArg,
+      },
+    },
+    handler: async (args, { client, policy }) => {
+      const namespace = args.namespace as string | undefined;
+      const context = args.context as string | undefined;
+      policy.guard({ tool: "list_resources", capability: "read", namespace, context });
+      const res = await client.listObjects(
+        args.apiVersion as string,
+        args.kind as string,
+        namespace,
+        {
+          labelSelector: args.labelSelector as string | undefined,
+          limit: args.limit as number | undefined,
+        },
+        context,
+      );
+      // Belt-and-suspenders: a namespace-less call can span every namespace the cluster has, so
+      // enforce K8S_NAMESPACE_ALLOWLIST client-side too (policy.guard only checked `namespace`
+      // when one was supplied).
+      return jsonResult(filterNamespaceAllowed(res, policy));
     },
   },
 ];

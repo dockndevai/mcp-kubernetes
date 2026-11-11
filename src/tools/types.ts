@@ -4,6 +4,11 @@ import type { GuardClient } from "../guard.js";
 import type { K8sClient } from "../k8s/client.js";
 import type { Capability, SecurityPolicy } from "../security.js";
 
+interface NamespacedList {
+  items?: Array<{ metadata?: { namespace?: string } } & Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
 export interface ToolContext {
   client: K8sClient;
   policy: SecurityPolicy;
@@ -43,6 +48,21 @@ export function jsonResult(value: unknown): ToolResult {
 
 export function textResult(text: string): ToolResult {
   return { content: [{ type: "text", text }] };
+}
+
+/**
+ * Drop items outside the configured namespace allowlist. A generic list that can span every
+ * namespace (e.g. list_resources called without a namespace) must not bypass K8S_NAMESPACE_ALLOWLIST
+ * the way a namespace-scoped call does via `policy.guard`; this enforces the same allowlist
+ * client-side. Cluster-scoped items (no `metadata.namespace`) are always kept.
+ */
+export function filterNamespaceAllowed<T extends NamespacedList>(list: T, policy: SecurityPolicy): T {
+  if (!Array.isArray(list.items)) return list;
+  const items = list.items.filter((item) => {
+    const ns = item.metadata?.namespace;
+    return ns === undefined || policy.isNamespaceAllowed(ns);
+  });
+  return { ...list, items };
 }
 
 /** Trim large list responses to the essential, model-friendly fields. */

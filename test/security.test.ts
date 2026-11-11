@@ -48,6 +48,24 @@ describe("namespace allowlist", () => {
     );
     expect(() => p.guard({ tool: "list_pods", capability: "read", namespace: "app" })).not.toThrow();
   });
+
+  it("generic list_resources is read-only and allowed in read-only mode, namespace allowlist enforced", () => {
+    const p = makePolicy({ mode: "read-only", namespaceAllowlist: ["app"] });
+    expect(() => p.guard({ tool: "list_resources", capability: "read", namespace: "app" })).not.toThrow();
+    expect(() => p.guard({ tool: "list_resources", capability: "read", namespace: "other" })).toThrow(
+      /allowlist/,
+    );
+    // No namespace supplied (cross-namespace call): guard alone doesn't check an allowlist against
+    // every namespace the cluster has — filterNamespaceAllowed (test/namespace-filter.test.ts) is
+    // what keeps that call from leaking resources outside the allowlist.
+    expect(() => p.guard({ tool: "list_resources", capability: "read" })).not.toThrow();
+  });
+
+  it("generic get_resource/list_resources can read protected namespaces (read-only forever)", () => {
+    const p = makePolicy({ mode: "read-only" });
+    expect(() => p.guard({ tool: "get_resource", capability: "read", namespace: "kube-system" })).not.toThrow();
+    expect(() => p.guard({ tool: "list_resources", capability: "read", namespace: "kube-system" })).not.toThrow();
+  });
 });
 
 describe("protected namespaces", () => {
