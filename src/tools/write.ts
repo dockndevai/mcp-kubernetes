@@ -33,6 +33,7 @@ export const writeTools: ToolDef[] = [
       if (replicas === 0) {
         const ok = await confirm.confirm({
           action: "scale deployment to 0 (takes it offline)",
+          reversible: true,
           target: `${namespace}/${name}`,
           details: { context },
           // uid@resourceVersion of the deployment. Controller status updates also bump resourceVersion (fails closed).

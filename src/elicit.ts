@@ -36,6 +36,8 @@ export interface ConfirmRequest {
   probe?: () => Promise<string | undefined>;
   /** Also require the human to type the target name — for the highest-impact deletes. */
   typed?: boolean;
+  /** The action can be undone (a move, a config change): the prompt then does not claim it "cannot be undone". */
+  reversible?: boolean;
   /**
    * The arguments carry a payload no human can read anyway (file contents, base64, …). Only then may
    * an over-long argument set be summarised in the prompt (first 1500 chars + length) and approved
@@ -160,6 +162,10 @@ export function makeConfirmer(server: McpServer, options: ConfirmerOptions = {})
 
       const before = await runProbe(probe);
       const version = before.ok ? before.value : undefined;
+      // Strict mode promises a human approved a pinned target; an unreadable target cannot be pinned.
+      if (probe && !before.ok && options.requireHuman) {
+        return refuse("could not read the target's current version, and human approval of a pinned target is required");
+      }
 
       if (!canElicit()) {
         if (options.requireHuman) {
@@ -189,7 +195,7 @@ export function makeConfirmer(server: McpServer, options: ConfirmerOptions = {})
       if (fp) lines.push(`  • fingerprint: ${fp}`);
 
       const message =
-        `Confirm ${action}: "${target}". This is destructive and cannot be undone.` +
+        `Confirm ${action}: "${target}".${req.reversible ? "" : " This is destructive and cannot be undone."}` +
         (lines.length ? `\n${lines.join("\n")}` : "");
 
       type Field = { type: "boolean"; title: string; description: string } | { type: "string"; title: string; description: string };

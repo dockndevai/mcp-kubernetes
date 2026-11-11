@@ -306,3 +306,44 @@ describe("secret-key matching is anchored to words", () => {
     }
   });
 });
+
+describe("accurate wording and strict probing", () => {
+  const messageOf = (elicit: ReturnType<typeof vi.fn>) => ((elicit.mock.calls[0] as unknown[])[0] as { message: string }).message;
+  const ok = () => vi.fn(async () => ({ action: "accept", content: { confirm: true } }));
+
+  it("says 'cannot be undone' by default, and not for reversible actions", async () => {
+    const a = ok();
+    await makeConfirmer(stubServer({ elicitation: HUMAN, elicit: a }), { audit: false }).confirm({ action: "delete x", target: "x" });
+    expect(messageOf(a)).toContain("cannot be undone");
+    const b = ok();
+    await makeConfirmer(stubServer({ elicitation: HUMAN, elicit: b }), { audit: false }).confirm({ action: "move x", target: "x", reversible: true });
+    expect(messageOf(b)).not.toContain("cannot be undone");
+  });
+
+  it("with requireHuman, a probe that cannot read the target refuses (no unpinned approval)", async () => {
+    const elicit = ok();
+    const c = makeConfirmer(stubServer({ elicitation: HUMAN, elicit }), { audit: false, requireHuman: true });
+    const out = await c.confirm({
+      action: "delete",
+      target: "x",
+      probe: async () => {
+        throw new Error("api down");
+      },
+    });
+    expect(out.approved).toBe(false);
+    expect(elicit).not.toHaveBeenCalled();
+  });
+
+  it("without requireHuman, an unreadable target still proceeds unpinned (shown as unavailable)", async () => {
+    const elicit = ok();
+    const out = await makeConfirmer(stubServer({ elicitation: HUMAN, elicit }), { audit: false }).confirm({
+      action: "delete",
+      target: "x",
+      probe: async () => {
+        throw new Error("api down");
+      },
+    });
+    expect(out.approved).toBe(true);
+    expect(messageOf(elicit)).toContain("resource version: unavailable");
+  });
+});
