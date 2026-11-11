@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { KubernetesObject } from "@kubernetes/client-node";
 import type { ToolDef } from "./types.js";
+import { targetNamespace } from "./target.js";
 import { jsonResult, textResult } from "./types.js";
 
 const contextArg = {
@@ -140,10 +141,18 @@ export const writeTools: ToolDef[] = [
       const manifest = args.manifest as KubernetesObject & { kind?: string };
       const namespace = manifest.metadata?.namespace;
       const context = args.context as string | undefined;
+      // Where the object will really land: a Namespace manifest's own name, or the default namespace.
+      const target = await targetNamespace(client, policy, {
+        apiVersion: manifest.apiVersion,
+        kind: manifest.kind,
+        name: manifest.metadata?.name,
+        namespace,
+        context,
+      });
       const { dryRun } = policy.guard({
         tool: "apply_manifest",
         capability: "write",
-        namespace,
+        namespace: target,
         context,
         requiresApply: true,
       });

@@ -158,6 +158,24 @@ export class K8sClient {
     return this.objects(context).read({ apiVersion, kind, metadata: { name, namespace } });
   }
 
+  /**
+   * The namespace a request for this kind will land in when the caller names none: the kube-config context's
+   * namespace (or "default") for a namespaced kind — exactly what {@link KubernetesObjectApi} falls back to — and
+   * undefined for a cluster-scoped kind. Throws for a kind the API server does not recognise, so a policy check
+   * can never be skipped on a kind whose scope is unknown.
+   */
+  async effectiveNamespace(apiVersion: string, kind: string, context?: string): Promise<string | undefined> {
+    const kc = this.scoped(context);
+    const api = KubernetesObjectApi.makeApiClient(kc) as unknown as {
+      resource(apiVersion: string, kind: string): Promise<{ namespaced?: boolean } | undefined>;
+    };
+    const resource = await api.resource(apiVersion, kind);
+    if (!resource) throw new Error(`Unrecognized API version and kind: ${apiVersion} ${kind}`);
+    if (!resource.namespaced) return undefined;
+    const current = kc.getCurrentContext();
+    return (current ? kc.getContextObject(current)?.namespace : undefined) || "default";
+  }
+
   // --- Writes ----------------------------------------------------------------
 
   async scaleDeployment(name: string, namespace: string, replicas: number, context?: string) {

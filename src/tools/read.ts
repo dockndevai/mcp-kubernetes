@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { ToolDef } from "./types.js";
+import { redactSecret } from "../redact.js";
+import { targetNamespace } from "./target.js";
 import { jsonResult, summarizePods } from "./types.js";
 
 const contextArg = {
@@ -222,7 +224,14 @@ export const readTools: ToolDef[] = [
     handler: async (args, { client, policy }) => {
       const namespace = args.namespace as string | undefined;
       const context = args.context as string | undefined;
-      policy.guard({ tool: "get_resource", capability: "read", namespace, context });
+      const target = await targetNamespace(client, policy, {
+        apiVersion: args.apiVersion as string,
+        kind: args.kind as string,
+        name: args.name as string,
+        namespace,
+        context,
+      });
+      policy.guard({ tool: "get_resource", capability: "read", namespace: target, context });
       const res = await client.getObject(
         args.apiVersion as string,
         args.kind as string,
@@ -230,7 +239,8 @@ export const readTools: ToolDef[] = [
         namespace,
         context,
       );
-      return jsonResult(res);
+      // Secret values never reach the model.
+      return jsonResult(redactSecret(res, args.kind as string));
     },
   },
 ];

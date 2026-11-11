@@ -11,6 +11,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   60 s request timeout, and a timeout fell through to "approved" (the `K8S_ALLOW_DELETE` / `K8S_ALLOW_EXEC` /
   `K8S_ALLOW_APPLY` gate had already passed). A prompt nobody answered therefore auto-approved a destructive
   operation. A timeout is now a refusal, and the wait defaults to 5 minutes.
+- **Protected-namespace and allowlist checks no longer skipped for namespace-scoped targets.** `delete_resource`
+  with kind `Namespace` and no `namespace` argument passed `undefined` to the policy, so `kube-system` could be
+  deleted with only admin mode and `K8S_ALLOW_DELETE` (and a harmless `namespace` argument next to a protected
+  name had the same effect). A `Namespace`'s own name is now what the policy checks, in `delete_resource`,
+  `get_resource` and `apply_manifest`; a namespaced kind with no (or an empty) namespace is checked against the
+  kube-config context's default namespace, which is where the request actually lands.
+- **`get_resource` no longer returns Secret values.** `data` and `stringData` are replaced with
+  `<redacted, N bytes>` (keys kept) and the `last-applied-configuration` annotation is redacted.
+- `apiVersion` in `get_resource` / `delete_resource` / `apply_manifest` is validated (`v1` or `<group>/<version>`)
+  before it is used to build a request.
 
 ### Added
 - **Approvals are bound to the exact action.** The prompt shows the tool, the full (secret-redacted)

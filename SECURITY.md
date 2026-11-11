@@ -13,7 +13,9 @@ other privileged automation and grant it the least access it needs.
   a `Role`/`ClusterRole` that grants only what you intend.
 - **Protect system namespaces.** `kube-system`, `kube-public`, and
   `kube-node-lease` are protected by default and can be read but never mutated.
-  Add more via `K8S_PROTECTED_NAMESPACES`.
+  Add more via `K8S_PROTECTED_NAMESPACES`. The namespace checked is the one a call really acts on: for a
+  `Namespace` that is its own name (in `delete_resource`, `get_resource` and `apply_manifest`), and for a
+  namespaced kind with no namespace given it is the kube-config context's default namespace.
 - **Pin the blast radius.** Use `K8S_NAMESPACE_ALLOWLIST` and
   `K8S_CONTEXT_ALLOWLIST` to constrain which namespaces and clusters are reachable.
 - **Gate the dangerous verbs explicitly.** `delete_resource` needs
@@ -39,6 +41,10 @@ other privileged automation and grant it the least access it needs.
 
 - The server uses your kube-config or in-cluster service account; it stores no
   credentials of its own.
+- `get_resource` redacts Secret values before they reach the model: `data` and `stringData` values become
+  `<redacted, N bytes>` (keys are kept) and the `kubectl.kubernetes.io/last-applied-configuration` annotation,
+  which holds a copy of the values, is redacted. No other tool reads Secret objects.
+  Pod logs and `exec_in_pod` output are returned as the workload produced them.
 - `exec_in_pod` is powerful (arbitrary in-container commands). Enable it only for
   trusted, tightly-scoped clusters.
 
