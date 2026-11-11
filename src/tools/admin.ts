@@ -125,7 +125,12 @@ export const adminTools: ToolDef[] = [
         command,
         context,
       );
-      return jsonResult(result);
+      // Whatever the command printed is workload/host output: mask credential-shaped text before it reaches the model.
+      return jsonResult({
+        ...result,
+        stdout: policy.redactLogOutput(result.stdout),
+        stderr: policy.redactLogOutput(result.stderr),
+      });
     },
   },
 ];

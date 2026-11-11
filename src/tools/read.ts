@@ -112,7 +112,7 @@ export const readTools: ToolDef[] = [
         },
         context,
       );
-      return { content: [{ type: "text" as const, text: String(logs) || "(no output)" }] };
+      return { content: [{ type: "text" as const, text: policy.redactLogOutput(String(logs)) || "(no output)" }] };
     },
   },
   {
