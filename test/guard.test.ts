@@ -12,7 +12,10 @@ const CFG = (mode: GuardConfig["mode"], failClosed: "confirm" | "allow" = "confi
 
 const confirmer = (approve: boolean): Confirmer => ({
   available: () => true,
-  confirm: async () => (approve ? { approved: true, interactive: true } : { approved: false, reason: "declined" }),
+  confirm: async () => (approve ? { approved: true, interactive: true, receipt: { approvedBy: "human" as const } } : { approved: false, reason: "declined" }),
+  forCall() {
+    return confirmer(approve);
+  },
 });
 
 function stubDecision(d: Partial<GuardDecision>): void {

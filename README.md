@@ -28,7 +28,8 @@ The design goal is **safe by default**: it starts read-only, can be scoped to an
 | Can it exec into pods? | `K8S_ALLOW_EXEC` | `false` | `exec_in_pod` needs this **and** admin mode; the tool isn't even registered otherwise. |
 | Preview without touching the cluster | `K8S_DRY_RUN` | `false` | Write/admin tools validate + log intent, then return without calling the API. |
 | Audit trail | `K8S_AUDIT_LOG` | `true` | Emits a JSON line to stderr per guarded operation (`ALLOW` / `DENY` / `DRY_RUN`). |
-| Interactive confirmation | *(automatic)* | — | Destructive & high-impact actions prompt the human to approve via MCP elicitation before running; clients without elicitation fall back to the `*_ALLOW_*` gate. |
+| Interactive confirmation | *(automatic)* | — | Destructive & high-impact actions (`delete_resource`, `exec_in_pod`, `apply_manifest`, scaling a deployment to 0) prompt the human to approve via MCP elicitation before running. The prompt shows the tool, the exact arguments and a fingerprint; the target's `uid@resourceVersion` is pinned across the prompt and the action is refused if it changed; a prompt nobody answers is a refusal. Deleting a namespace also asks the human to type its name. |
+| Require a human | `K8S_REQUIRE_HUMAN_APPROVAL` | `false` | When `true`, destructive ops are **refused** if the client cannot elicit (instead of falling back to the `*_ALLOW_*` gate alone). |
 
 The layers are independent — e.g. `admin` mode with all three opt-ins `false` can restart and scale deployments but can neither delete resources nor exec into pods.
 
