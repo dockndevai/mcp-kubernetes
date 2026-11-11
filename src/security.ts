@@ -8,7 +8,7 @@
  * Pure logic, no I/O, so it is fully unit-testable.
  */
 
-import { redactLogText } from "./redact.js";
+import { redactLogText, redactObject } from "./redact.js";
 
 export type Capability = "read" | "write" | "admin";
 export type AccessMode = "read-only" | "read-write" | "admin";
@@ -51,6 +51,12 @@ export interface SecurityConfig {
    * explicitly `false`; `K8S_REDACT_LOGS=false` turns it off.
    */
   redactLogs?: boolean;
+  /**
+   * Mask credential-shaped content in the objects the read tools return (env values by variable name, ConfigMap entries,
+   * Route TLS keys, event messages, API error bodies; best effort, see src/redact.ts). On unless this is explicitly `false`;
+   * `K8S_REDACT_OBJECTS=false` turns it off. Secret values are redacted regardless of this setting.
+   */
+  redactObjects?: boolean;
 }
 
 export class PolicyError extends Error {
@@ -106,6 +112,16 @@ export class SecurityPolicy {
   /** Applies the log-redaction setting to text a workload wrote (pod logs, exec output). */
   redactLogOutput(text: string): string {
     return this.config.redactLogs === false ? text : redactLogText(text);
+  }
+
+  /** An object (or list) about to be returned: Secrets always, env / ConfigMap / Route credentials unless `redactObjects` is false. */
+  redactObject<T>(obj: T, requestedKind?: string): T {
+    return redactObject(obj, requestedKind, this.config.redactObjects !== false);
+  }
+
+  /** Free text taken from an object or an API error (event messages): masked like logs unless `redactObjects` is false. */
+  redactObjectText(text: string): string {
+    return this.config.redactObjects === false ? text : redactLogText(text);
   }
 
   guard(ctx: GuardContext): { dryRun: boolean } {

@@ -38,7 +38,7 @@ export function buildServer(config: AppConfig): { server: McpServer; enabled: st
         const callCtx: ToolContext = { ...ctx, confirm: confirmer.forCall(tool.name, args ?? {}) };
         return await tool.handler(args ?? {}, callCtx);
       } catch (err) {
-        return toErrorResult(err);
+        return toErrorResult(err, policy);
       }
     });
   }
@@ -46,7 +46,7 @@ export function buildServer(config: AppConfig): { server: McpServer; enabled: st
   return { server, enabled };
 }
 
-function toErrorResult(err: unknown) {
+function toErrorResult(err: unknown, policy: SecurityPolicy) {
   let message: string;
   if (err instanceof PolicyError) {
     message = `Policy denied: ${err.message}`;
@@ -57,7 +57,8 @@ function toErrorResult(err: unknown) {
   } else {
     message = String(err);
   }
-  return { content: [{ type: "text" as const, text: message }], isError: true };
+  // The API server can echo submitted values in an error body.
+  return { content: [{ type: "text" as const, text: policy.redactObjectText(message) }], isError: true };
 }
 
 function truncate(s: string, max = 800): string {

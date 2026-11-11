@@ -1,6 +1,5 @@
 import { z } from "zod";
 import type { ToolDef } from "./types.js";
-import { redactSecret } from "../redact.js";
 import { targetNamespace } from "./target.js";
 import { jsonResult, summarizePods } from "./types.js";
 
@@ -68,7 +67,7 @@ export const readTools: ToolDef[] = [
     capability: "read",
     config: {
       title: "Get pod",
-      description: "Fetch the full representation of a single pod.",
+      description: "Fetch the full representation of a single pod. Credential-shaped env values and arguments are masked.",
       inputSchema: {
         name: z.string().describe("Pod name"),
         namespace: z.string().describe("Namespace"),
@@ -80,7 +79,8 @@ export const readTools: ToolDef[] = [
       const context = args.context as string | undefined;
       policy.guard({ tool: "get_pod", capability: "read", namespace, context });
       const res = await client.getPod(args.name as string, namespace, context);
-      return jsonResult(res);
+      // Env values, command-line arguments and the last-applied annotation can hold credentials.
+      return jsonResult(policy.redactObject(res, "Pod"));
     },
   },
   {
@@ -199,7 +199,7 @@ export const readTools: ToolDef[] = [
         type: e.type,
         reason: e.reason,
         object: `${e.involvedObject?.kind}/${e.involvedObject?.name}`,
-        message: e.message,
+        message: typeof e.message === "string" ? policy.redactObjectText(e.message) : e.message,
         count: e.count,
         lastSeen: e.lastTimestamp,
       }));
@@ -212,7 +212,8 @@ export const readTools: ToolDef[] = [
     config: {
       title: "Get any resource",
       description:
-        "Read an arbitrary Kubernetes object by apiVersion/kind/name (e.g. apiVersion=apps/v1, kind=Deployment).",
+        "Read an arbitrary Kubernetes object by apiVersion/kind/name (e.g. apiVersion=apps/v1, kind=Deployment). " +
+        "Secret values are always redacted; credential-shaped env values and ConfigMap entries are masked.",
       inputSchema: {
         apiVersion: z.string().describe("e.g. v1, apps/v1, networking.k8s.io/v1"),
         kind: z.string().describe("e.g. Pod, Deployment, Ingress"),
@@ -239,8 +240,8 @@ export const readTools: ToolDef[] = [
         namespace,
         context,
       );
-      // Secret values never reach the model.
-      return jsonResult(redactSecret(res, args.kind as string));
+      // Secret values never reach the model; env values, ConfigMap entries and Route keys are masked unless disabled.
+      return jsonResult(policy.redactObject(res, args.kind as string));
     },
   },
 ];

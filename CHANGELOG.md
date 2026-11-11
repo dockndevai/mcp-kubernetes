@@ -29,6 +29,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   GCP, GitHub, GitLab, Slack, Stripe, npm, Vault, SendGrid). On by default; `K8S_REDACT_LOGS=false` disables it.
   Heuristic defence in depth, not a guarantee: a bare random secret with no known shape or key name is not
   caught. See SECURITY.md for the full list and trade-offs.
+- **Credentials in pod specs and ConfigMaps no longer reach the model.** `get_pod` and `get_resource` returned the
+  full object, so `spec.containers[].env[].value` (and `initContainers`, every pod template under Deployments,
+  StatefulSets, DaemonSets, Jobs, CronJobs, ...), ConfigMap `data` / `binaryData`, Route `tls.key`, command-line
+  arguments such as `--password x`, and the `last-applied-configuration` annotation (a copy of the manifest) were
+  returned verbatim. They now pass through `redactObject` (`src/redact.ts`): env values (and probe headers) whose
+  name looks secret are replaced by `<redacted, N bytes>` (`valueFrom` references stay visible), other values are
+  scrubbed for URL passwords / token shapes / `key=value` pairs / PEM keys, ConfigMap entries with secret-shaped keys or
+  credential-looking values are masked, Route `tls.key` and BuildConfig webhook secrets are masked, and event messages and
+  API error text are scrubbed. Secrets nested in a List or Template are redacted too. Heuristic and by name (see
+  SECURITY.md for what is not caught); on by default, `K8S_REDACT_OBJECTS=false` turns off everything but the Secret
+  redaction, which is never optional.
 - `apiVersion` in `get_resource` / `delete_resource` / `apply_manifest` is validated (`v1` or `<group>/<version>`)
   before it is used to build a request.
 

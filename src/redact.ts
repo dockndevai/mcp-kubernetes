@@ -9,6 +9,9 @@ const LAST_APPLIED = "kubectl.kubernetes.io/last-applied-configuration";
 
 type Obj = Record<string, unknown>;
 
+/** What `redactSecret` is told when the caller already knows the object is a Secret. */
+const SECRET_KIND = "Secret";
+
 function redactValues(values: unknown, decode: (v: string) => number): Obj | undefined {
   if (!values || typeof values !== "object") return undefined;
   const out: Obj = {};
@@ -123,7 +126,7 @@ const isAuthorityEnd = (c: number) =>
   c === 96 /* ` */ || c === 60 /* < */ || c === 62 /* > */ || c === 92 /* \ */ || c <= 32;
 
 /** scheme://user:PASSWORD@host -> scheme://user:[REDACTED]@host. A user without a password is left alone. */
-function redactUrlPasswords(line: string): string {
+export function redactUrlPasswords(line: string): string {
   let idx = line.indexOf("://");
   if (idx < 0) return line;
   let out = "";
@@ -149,17 +152,15 @@ function redactUrlPasswords(line: string): string {
 }
 
 // Keywords a key must END in (so `token_count`, `secretName`, `tokenizer`, `max_tokens` are left alone).
-const KEY_WORDS = new RegExp(
-  [
-    "password", "passwd", "passphrase",
-    "x[_-]?amz[_-]?signature",
-    "secret[_-]?(?:access[_-]?)?key", "secret",
-    "token", "credentials?", "authorization",
-    "(?:api|access|private|signing|encryption|master|account|auth|primary|secondary)[_-]?key",
-    "sig",
-  ].join("|"),
-  "gi",
-);
+const KEY_WORD_PATTERNS = [
+  "password", "passwd", "passphrase",
+  "x[_-]?amz[_-]?signature",
+  "secret[_-]?(?:access[_-]?)?key", "secret",
+  "token", "credentials?", "authorization",
+  "(?:api|access|private|signing|encryption|master|account|auth|primary|secondary)[_-]?key",
+  "sig",
+];
+const KEY_WORDS = new RegExp(KEY_WORD_PATTERNS.join("|"), "gi");
 const isKeyChar = (ch: string | undefined) => ch !== undefined && /[A-Za-z0-9_.-]/.test(ch);
 const SCHEME = /^(?:bearer|basic|digest|token|negotiate|ntlm|aws4-hmac-sha256)$/i;
 const QUOTED_SCHEME = /^(?:bearer|basic|digest|token|negotiate|ntlm|aws4-hmac-sha256)[ \t]+/i;
@@ -296,4 +297,215 @@ export function redactLogText(text: string): string {
     lines[i] = redactTokens(redactKeyValues(redactUrlPasswords(l)));
   }
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Object redaction (workload specs, ConfigMaps, Routes, events): best effort, mostly BY NAME.
+//
+// `redactSecret` above is unconditional: Secrets never reach the model. Other objects can carry credentials too, and
+// they are not shaped like Secrets, so `redactObject` walks the whole (JSON) object and masks, in order:
+//   1. a nested Secret anywhere (a List, a Template's `objects`): always, even when heuristics are off
+//   2. `env` entries (containers, initContainers, ephemeralContainers, and every pod template under Deployments,
+//      StatefulSets, DaemonSets, ReplicaSets, Jobs, CronJobs' jobTemplate, custom resources, ...), `httpHeaders` and
+//      `parameters` entries: the `value` of an entry whose `name` is secret-shaped (see isSecretName) becomes
+//      `<redacted, N bytes>`; any other value is still scrubbed with redactLogText (URL passwords, token shapes,
+//      key=value pairs, PEM private keys). `valueFrom` references are kept (a secretKeyRef names a Secret, it does
+//      not hold the value).
+//   3. `command` / `args` string lists: scrubbed with redactLogText, and the value after a secret-shaped flag
+//      (`--password hunter2`) is masked
+//   4. ConfigMap `data` / `binaryData`: an entry whose KEY is secret-shaped is masked; any other value is scrubbed with
+//      redactLogText (binaryData is decoded first and masked as a whole when the text inside has a credential)
+//   5. Route `tls.key` / `spec.tls.key` (OpenShift): masked; the certificate fields are scrubbed (a private key
+//      pasted into one is masked, a public certificate is left readable)
+//   6. BuildConfig webhook trigger `secret`s; Event `message`s (scrubbed with redactLogText)
+//   7. the `kubectl.kubernetes.io/last-applied-configuration` annotation, which holds a copy of the manifest: parsed
+//      and redacted like any other object (or replaced by `<redacted>` when it is not JSON)
+//   8. passwords inside any `scheme://user:password@host` URL in any string
+//
+// Everything after step 1 is HEURISTIC and can be turned off by the operator (`redactObjects: false`). A secret
+// stored under an innocuous name with an innocuous shape (`CONFIG=<random string>`, a password in a ConfigMap key
+// called `app.properties` that is not written as key=value, an opaque binary blob under a neutral name) is NOT
+// caught. Names are preferred over values, and over-redaction of a name like `GOOGLE_APPLICATION_CREDENTIALS` (a path)
+// is accepted: the cost is a missing value, not a leaked credential.
+// ---------------------------------------------------------------------------------------------------------------
+
+const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Last part of an env var / config key name that makes it secret-shaped. Built from the same list as redactKeyValues. */
+const SECRET_NAME = new RegExp(
+  `(?:${[
+    ...KEY_WORD_PATTERNS.filter((p) => p !== "sig"),
+    "secret[_-]?key[_-]?base", "key", "auth", "bearer",
+    "connection[_-]?string", "conn[_-]?str",
+    "dockerconfigjson", "dockercfg", "kubeconfig", "netrc",
+    "(?:^|[^a-z])(?:pass|pwd|dsn|jwt)",
+  ].join("|")})s?$`,
+  "i",
+);
+
+/** Whether an env var / header / parameter / config key NAME says its value is a credential (`DB_PASSWORD`, `apiKey`, `tls.key`). */
+export function isSecretName(name: string): boolean {
+  return SECRET_NAME.test(name.trim().slice(-256));
+}
+
+const CONFIG_FILE_EXT = /\.(?:json|ya?ml|properties|env|txt|conf|cfg|ini|xml|toml)$/i;
+const SECRET_FILE = /(?:\.(?:p12|pfx|jks|keystore)|^id_(?:rsa|dsa|ecdsa|ed25519))$/i;
+/** ConfigMap keys are often file names: `credentials.json`, `db.password`, `server.key`, `keystore.p12`, `id_rsa`. */
+function isSecretConfigKey(key: string): boolean {
+  return isSecretName(key.replace(CONFIG_FILE_EXT, "")) || SECRET_FILE.test(key);
+}
+
+const PLACEHOLDER = /^<redacted, \d+ bytes>$/;
+function placeholder(v: string, base64 = false): string {
+  if (PLACEHOLDER.test(v)) return v;
+  return `<redacted, ${base64 ? Buffer.from(v, "base64").length : Buffer.byteLength(v)} bytes>`;
+}
+
+function decodeText(b: Buffer): string | undefined {
+  if (b.includes(0)) return undefined;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(b);
+  } catch {
+    return undefined;
+  }
+}
+
+function redactConfigData(data: Obj, binary: boolean): Obj {
+  const out: Obj = {};
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v !== "string") out[k] = v;
+    else if (isSecretConfigKey(k)) out[k] = placeholder(v, binary);
+    else if (!binary) out[k] = redactLogText(v);
+    else {
+      const text = decodeText(Buffer.from(v, "base64"));
+      out[k] = text !== undefined && redactLogText(text) !== text ? placeholder(v, true) : v;
+    }
+  }
+  return out;
+}
+
+function redactTls(tls: unknown): unknown {
+  if (!isObj(tls)) return tls;
+  const out: Obj = { ...tls };
+  if (typeof out.key === "string") out.key = placeholder(out.key);
+  for (const f of ["certificate", "caCertificate", "destinationCACertificate"]) {
+    if (typeof out[f] === "string") out[f] = redactLogText(out[f] as string);
+  }
+  return out;
+}
+
+const WEBHOOK_TRIGGERS = ["github", "gitlab", "bitbucket", "generic"];
+function redactTriggers(triggers: unknown): unknown {
+  if (!Array.isArray(triggers)) return triggers;
+  return triggers.map((t) => {
+    if (!isObj(t)) return t;
+    const out: Obj = { ...t };
+    for (const w of WEBHOOK_TRIGGERS) {
+      const hook = out[w];
+      if (isObj(hook) && typeof hook.secret === "string") out[w] = { ...hook, secret: placeholder(hook.secret) };
+    }
+    return out;
+  });
+}
+
+/** Name/value lists (`env`, `httpHeaders`, `parameters`). Entries of any other shape go through `other`. */
+function redactNameValues(list: unknown[], other: (e: unknown) => unknown): unknown[] {
+  return list.map((e) => {
+    if (!isObj(e) || typeof e.name !== "string" || typeof e.value !== "string") return other(e);
+    return { ...e, value: isSecretName(e.name) ? placeholder(e.value) : redactLogText(e.value) };
+  });
+}
+
+/** `command` / `args`: each element scrubbed, and the element after a secret-shaped flag (`--password x`) masked. */
+function redactArgv(list: string[]): string[] {
+  let maskNext = false;
+  return list.map((a) => {
+    if (maskNext) {
+      maskNext = false;
+      if (!a.startsWith("-")) return placeholder(a);
+    }
+    const flag = /^--?([A-Za-z0-9][A-Za-z0-9_.-]*)$/.exec(a);
+    if (flag && isSecretName(flag[1])) maskNext = true;
+    return redactLogText(a);
+  });
+}
+
+const LAST_APPLIED_KEY = "kubectl.kubernetes.io/last-applied-configuration";
+const DEEP = "<redacted: nested too deep>";
+const MAX_DEPTH = 64;
+
+/** `kind` / requested kind in one comparable form: lower case, singular (`configmaps` and `ConfigMap` are the same). */
+const kindKey = (k: string | undefined): string | undefined => k?.toLowerCase().replace(/s$/, "");
+
+function kindRules(o: Obj, kind: string | undefined): void {
+  switch (kind) {
+    case "configmap":
+      if (isObj(o.data)) o.data = redactConfigData(o.data, false);
+      if (isObj(o.binaryData)) o.binaryData = redactConfigData(o.binaryData, true);
+      break;
+    case "route":
+      if (o.tls !== undefined) o.tls = redactTls(o.tls);
+      if (isObj(o.spec) && o.spec.tls !== undefined) o.spec = { ...o.spec, tls: redactTls(o.spec.tls) };
+      break;
+    case "buildconfig":
+      if (isObj(o.spec) && o.spec.triggers !== undefined) o.spec = { ...o.spec, triggers: redactTriggers(o.spec.triggers) };
+      break;
+    case "event":
+      if (typeof o.message === "string") o.message = redactLogText(o.message);
+      break;
+  }
+}
+
+function walk(node: unknown, hint: string | undefined, heuristics: boolean, depth: number): unknown {
+  if (typeof node === "string") return heuristics ? redactUrlPasswords(node) : node;
+  if (Array.isArray(node)) {
+    if (depth > MAX_DEPTH) return DEEP;
+    return node.map((x) => walk(x, undefined, heuristics, depth + 1));
+  }
+  if (!isObj(node)) return node;
+  if (depth > MAX_DEPTH) return DEEP;
+  const ownKind = typeof node.kind === "string" ? kindKey(node.kind) : undefined;
+  // A list: its items usually omit `kind`, so they take the list's (or the requested) kind.
+  const isList = Array.isArray(node.items) && (ownKind === undefined || ownKind === "list" || ownKind.endsWith("list"));
+  const itemHint = isList ? (ownKind && ownKind !== "list" ? ownKind.slice(0, -4) : hint) : undefined;
+  const kind = isList ? undefined : (ownKind ?? hint);
+  if (kind === "secret") return redactSecret(node, SECRET_KIND);
+  const out: Obj = { ...node };
+  if (heuristics) kindRules(out, kind);
+  for (const [k, v] of Object.entries(out)) {
+    const child = (x: unknown) => walk(x, undefined, heuristics, depth + 1);
+    if (k === "items" && isList && Array.isArray(v)) {
+      out[k] = v.map((i) => walk(i, itemHint, heuristics, depth + 1));
+    } else if (heuristics && Array.isArray(v) && (k === "env" || k === "httpHeaders" || k === "parameters")) {
+      out[k] = redactNameValues(v, child);
+    } else if (heuristics && Array.isArray(v) && (k === "command" || k === "args") && v.every((x) => typeof x === "string")) {
+      out[k] = redactArgv(v as string[]);
+    } else if (heuristics && k === "annotations" && isObj(v) && typeof v[LAST_APPLIED_KEY] === "string") {
+      out[k] = { ...(child(v) as Obj), [LAST_APPLIED_KEY]: redactLastApplied(v[LAST_APPLIED_KEY] as string) };
+    } else {
+      out[k] = child(v);
+    }
+  }
+  return out;
+}
+
+function redactLastApplied(json: string): string {
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (parsed && typeof parsed === "object") return JSON.stringify(walk(parsed, undefined, true, 0));
+  } catch {
+    /* not JSON: fall through */
+  }
+  return "<redacted>";
+}
+
+/**
+ * Returns a copy of `obj` (a Kubernetes object or list) that is safe to hand to the model: Secrets are always
+ * redacted (nested ones too); with `heuristics` (the default) the by-name redaction described above is applied as well.
+ * `requestedKind` is the kind the caller asked for (`ConfigMap`, `configmaps`), for responses that omit `kind`.
+ * The input is not mutated; Date and class instances are normalised to plain JSON, which is what is returned to the model anyway.
+ */
+export function redactObject<T>(obj: T, requestedKind?: string, heuristics = true): T {
+  if (!obj || typeof obj !== "object") return obj;
+  return walk(JSON.parse(JSON.stringify(obj)), kindKey(requestedKind), heuristics, 0) as T;
 }
