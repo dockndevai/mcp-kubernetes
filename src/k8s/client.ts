@@ -4,17 +4,38 @@
  */
 import { PassThrough } from "node:stream";
 import {
+  ApiException,
   AppsV1Api,
   CoreV1Api,
   Exec,
   KubeConfig,
   KubernetesObjectApi,
   type KubernetesObject,
+  type V1DeleteOptions,
 } from "@kubernetes/client-node";
 
 /** The subset of a KubernetesObject the object API needs to identify it. */
 type ObjectHeader = { apiVersion: string; kind: string; metadata: { name: string; namespace?: string } };
 import type { KubeConnection } from "../config.js";
+
+/** `uid@resourceVersion` of an object, or undefined when either is missing. */
+export function versionToken(obj: KubernetesObject | undefined): string | undefined {
+  const uid = obj?.metadata?.uid;
+  const rv = obj?.metadata?.resourceVersion;
+  return uid && rv ? `${uid}@${rv}` : undefined;
+}
+
+/** Inverse of {@link versionToken}. */
+export function parseVersionToken(token: string | undefined): { uid: string; resourceVersion: string } | undefined {
+  if (!token) return undefined;
+  const i = token.indexOf("@");
+  if (i <= 0 || i === token.length - 1) return undefined;
+  return { uid: token.slice(0, i), resourceVersion: token.slice(i + 1) };
+}
+
+function isNotFound(err: unknown): boolean {
+  return err instanceof ApiException && err.code === 404;
+}
 
 export interface ExecResult {
   stdout: string;
@@ -185,36 +206,100 @@ export class K8sClient {
     return this.core(context).createNamespace({ body: { metadata: { name } } });
   }
 
-  /** Create the object if absent, otherwise replace it (preserving resourceVersion). */
-  async applyObject(obj: KubernetesObject, context?: string): Promise<{ action: "created" | "replaced" }> {
+  /**
+   * Create the object if absent, otherwise replace it (preserving resourceVersion).
+   * When `expectedVersion` (a token from {@link objectVersion}) is given and the existing object no longer
+   * matches it, nothing is written. The replace itself carries the resourceVersion that was just read, so
+   * the API server also rejects it (409) if the object changes between that read and the write.
+   */
+  async applyObject(
+    obj: KubernetesObject,
+    context?: string,
+    expectedVersion?: string,
+  ): Promise<{ action: "created" | "replaced" }> {
     const api = this.objects(context);
+    let existing: KubernetesObject | undefined;
     try {
-      const existing = await api.read(obj as ObjectHeader);
-      const merged = {
-        ...obj,
-        metadata: {
-          ...obj.metadata,
-          resourceVersion: (existing as KubernetesObject).metadata?.resourceVersion,
-        },
-      };
-      await api.replace(merged);
-      return { action: "replaced" };
+      existing = (await api.read(obj as ObjectHeader)) as KubernetesObject;
     } catch {
+      existing = undefined;
+    }
+    if (!existing) {
       await api.create(obj);
       return { action: "created" };
     }
+    if (expectedVersion !== undefined && versionToken(existing) !== expectedVersion) {
+      throw new Error(
+        `${obj.kind}/${obj.metadata?.name} changed since it was approved (version ${expectedVersion} → ${versionToken(existing) ?? "none"}); nothing was applied.`,
+      );
+    }
+    await api.replace({
+      ...obj,
+      metadata: { ...obj.metadata, resourceVersion: existing.metadata?.resourceVersion },
+    });
+    return { action: "replaced" };
   }
 
   // --- Admin -----------------------------------------------------------------
 
+  /**
+   * Delete an object. When `expectedVersion` (a token from {@link objectVersion}) is given, it is sent as
+   * delete preconditions (uid + resourceVersion), so the API server refuses (409) if the object was
+   * replaced or modified after the human approved it.
+   */
   deleteObject(
     apiVersion: string,
     kind: string,
     name: string,
     namespace: string | undefined,
     context?: string,
+    expectedVersion?: string,
   ) {
-    return this.objects(context).delete({ apiVersion, kind, metadata: { name, namespace } });
+    const pin = parseVersionToken(expectedVersion);
+    const body: V1DeleteOptions | undefined = pin
+      ? { preconditions: { uid: pin.uid, resourceVersion: pin.resourceVersion } }
+      : undefined;
+    return this.objects(context).delete(
+      { apiVersion, kind, metadata: { name, namespace } },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      body,
+    );
+  }
+
+  /**
+   * Version token for an exact object: `metadata.uid@metadata.resourceVersion`, or undefined if it does not exist.
+   * Any write to the object (including status updates by controllers/kubelet) bumps resourceVersion, so a busy
+   * object may need the action re-issued; that fails closed. The uid distinguishes a delete+recreate under the
+   * same name. Other API errors (403, transport) throw.
+   */
+  async objectVersion(
+    apiVersion: string,
+    kind: string,
+    name: string,
+    namespace: string | undefined,
+    context?: string,
+  ): Promise<string | undefined> {
+    try {
+      const obj = (await this.objects(context).read({ apiVersion, kind, metadata: { name, namespace } })) as KubernetesObject;
+      return versionToken(obj);
+    } catch (err) {
+      if (isNotFound(err)) return undefined;
+      throw err;
+    }
+  }
+
+  /** Version token for a deployment (see {@link objectVersion}). */
+  deploymentVersion(name: string, namespace: string, context?: string) {
+    return this.objectVersion("apps/v1", "Deployment", name, namespace, context);
+  }
+
+  /** Version token for a pod (see {@link objectVersion}). */
+  podVersion(name: string, namespace: string, context?: string) {
+    return this.objectVersion("v1", "Pod", name, namespace, context);
   }
 
   /** Execute a command in a pod container and collect stdout/stderr. */

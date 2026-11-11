@@ -30,7 +30,13 @@ export const writeTools: ToolDef[] = [
       if (dryRun) return textResult(`[dry-run] Would scale ${namespace}/${name} to ${replicas} replicas.`);
       // Scaling to zero takes the workload offline — confirm that specifically.
       if (replicas === 0) {
-        const ok = await confirm.confirm({ action: "scale deployment to 0 (takes it offline)", target: `${namespace}/${name}`, details: { context } });
+        const ok = await confirm.confirm({
+          action: "scale deployment to 0 (takes it offline)",
+          target: `${namespace}/${name}`,
+          details: { context },
+          // uid@resourceVersion of the deployment. Controller status updates also bump resourceVersion (fails closed).
+          probe: () => client.deploymentVersion(name, namespace, context),
+        });
         if (!ok.approved) return textResult(`Scale cancelled — ${ok.reason}.`);
       }
       await client.scaleDeployment(name, namespace, replicas, context);
@@ -157,9 +163,12 @@ export const writeTools: ToolDef[] = [
         action: "apply manifest (create or replace)",
         target: `${manifest.kind}/${manifest.metadata.name}${namespace ? ` in ${namespace}` : ""}`,
         details: { context },
+        // uid@resourceVersion of the existing object; undefined (and so must stay undefined) when it will be created.
+        // Limit: it pins the live object, not the manifest content — the manifest is bound by the fingerprint.
+        probe: () => client.objectVersion(manifest.apiVersion!, manifest.kind!, manifest.metadata!.name!, namespace, context),
       });
       if (!ok.approved) return textResult(`Apply cancelled — ${ok.reason}.`);
-      const { action } = await client.applyObject(manifest, context);
+      const { action } = await client.applyObject(manifest, context, ok.receipt.version);
       return jsonResult({ applied: true, action, kind: manifest.kind, name: manifest.metadata.name, namespace });
     },
   },

@@ -43,15 +43,23 @@ export const adminTools: ToolDef[] = [
         { tool: "delete_resource", command: `kubectl delete ${args.kind}/${args.name}${namespace ? ` -n ${namespace}` : ""}`, context: ref },
         confirm,
       );
-      const ok = await confirm.confirm({ action: "delete resource", target: ref, details: { context } });
+      const apiVersion = args.apiVersion as string;
+      const kind = args.kind as string;
+      const name = args.name as string;
+      // Deleting a namespace removes everything in it: the one delete that also asks the human to type the name.
+      const isNamespace = apiVersion === "v1" && kind === "Namespace";
+      const ok = await confirm.confirm({
+        action: isNamespace ? "delete namespace (and everything in it)" : "delete resource",
+        target: isNamespace ? name : ref,
+        details: { context },
+        typed: isNamespace,
+        // uid@resourceVersion of the exact object. Limit: any write (including status updates) changes
+        // resourceVersion, which fails closed; a recreate under the same name changes the uid.
+        probe: () => client.objectVersion(apiVersion, kind, name, namespace, context),
+      });
       if (!ok.approved) return textResult(`Deletion cancelled — ${ok.reason}.`);
-      await client.deleteObject(
-        args.apiVersion as string,
-        args.kind as string,
-        args.name as string,
-        namespace,
-        context,
-      );
+      // The pinned token is also sent as delete preconditions, so the API server rejects a stale delete.
+      await client.deleteObject(apiVersion, kind, name, namespace, context, ok.receipt.version);
       return jsonResult({ deleted: true, kind: args.kind, name: args.name, namespace });
     },
   },
@@ -96,6 +104,9 @@ export const adminTools: ToolDef[] = [
         action: "exec command in pod",
         target: `${namespace}/${args.name} [${args.container}]`,
         details: { command: command.join(" ") },
+        // uid@resourceVersion of the pod. Limit: it does not cover the container's filesystem or processes, and
+        // exec has no server-side precondition, so a change between the second probe and the exec is not caught.
+        probe: () => client.podVersion(args.name as string, namespace, context),
       });
       if (!ok.approved) return textResult(`Exec cancelled — ${ok.reason}.`);
       const result = await client.execInPod(

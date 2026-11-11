@@ -20,6 +20,16 @@ other privileged automation and grant it the least access it needs.
   `K8S_ALLOW_DELETE`, `apply_manifest` needs `K8S_ALLOW_APPLY`, and `exec_in_pod`
   needs `K8S_ALLOW_EXEC` — each on top of the required mode. `exec_in_pod` is not
   even registered unless its flag is set.
+- **Require a human for destructive ops.** Set `K8S_REQUIRE_HUMAN_APPROVAL=true` so `delete_resource`,
+  `exec_in_pod`, `apply_manifest` and scale-to-zero are refused when the client cannot show an approval
+  prompt. Each approval is bound to the exact tool and arguments (fingerprint) and to the target object's
+  `metadata.uid` + `metadata.resourceVersion` (for `exec_in_pod`, the pod's; for `apply_manifest`, the
+  existing object's, or "absent" when it will be created); if the object changed while the human was
+  deciding, the action is refused. `delete_resource` also sends the approved uid and resourceVersion to the
+  API server as delete preconditions. Deleting a namespace also asks the human to type its name. Any write
+  to the object, including controller status updates, changes its resourceVersion, so a busy object may
+  need the action re-issued. Approval receipts are written to the audit log (`"audit":"approval"`, with
+  `approvedBy` = `human` or `flag-only`).
 - **Preview with dry-run.** `K8S_DRY_RUN=true` validates and logs write intent
   without contacting the cluster.
 - **Keep the audit log on.** `K8S_AUDIT_LOG=true` (default) writes a JSON line per

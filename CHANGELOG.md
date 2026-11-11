@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-11
+
+### Security
+- **Approval no longer fails open on timeout.** The human-approval prompt used the MCP SDK's default
+  60 s request timeout, and a timeout fell through to "approved" (the `K8S_ALLOW_DELETE` / `K8S_ALLOW_EXEC` /
+  `K8S_ALLOW_APPLY` gate had already passed). A prompt nobody answered therefore auto-approved a destructive
+  operation. A timeout is now a refusal, and the wait defaults to 5 minutes.
+
+### Added
+- **Approvals are bound to the exact action.** The prompt shows the tool, the full (secret-redacted)
+  arguments and a fingerprint; every approval and refusal is written to the audit log as
+  `"audit":"approval"` with the fingerprint, resource version and `approvedBy` (`human` / `flag-only`).
+  This also applies to the prompts raised by the optional laya-guard integration.
+- **Approvals are bound to the target's version.** `delete_resource`, `exec_in_pod`, `apply_manifest` and
+  `scale_deployment` (to 0) read the target's `metadata.uid` + `metadata.resourceVersion` before the prompt and
+  again after the human answers, and refuse if it changed (including a delete + recreate under the same name).
+- `delete_resource` passes the approved uid and resourceVersion to the API server as delete preconditions;
+  `apply_manifest` refuses to replace an object that no longer matches the approved version.
+- `K8S_REQUIRE_HUMAN_APPROVAL=true` — refuse destructive ops when the client cannot elicit.
+- `delete_resource` on a namespace asks the human to type the namespace name.
+
+### Changed
+- `apply_manifest` no longer retries a failed replace as a create; an error from the replace is now reported as is.
+
+Tracking issue: https://github.com/dockndevai/mcp-core/issues/1
+
 ## [0.3.5] - 2026-11-09
 
 ### Changed

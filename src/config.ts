@@ -59,6 +59,7 @@ export function loadConfig(): AppConfig {
       allowExec: bool("K8S_ALLOW_EXEC", false),
       dryRun: bool("K8S_DRY_RUN", false),
       auditLog: bool("K8S_AUDIT_LOG", true),
+      requireHumanApproval: bool("K8S_REQUIRE_HUMAN_APPROVAL", false),
     },
   };
 }
