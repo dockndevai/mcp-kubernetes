@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ToolDef } from "./types.js";
+import { targetNamespace } from "./target.js";
 import { jsonResult, textResult } from "./types.js";
 
 const contextArg = {
@@ -30,10 +31,18 @@ export const adminTools: ToolDef[] = [
     handler: async (args, { client, policy, confirm, guard }) => {
       const namespace = args.namespace as string | undefined;
       const context = args.context as string | undefined;
+      // What the policy checks is where the delete lands: a Namespace's own name, or the default namespace.
+      const target = await targetNamespace(client, policy, {
+        apiVersion: args.apiVersion as string,
+        kind: args.kind as string,
+        name: args.name as string,
+        namespace,
+        context,
+      });
       const { dryRun } = policy.guard({
         tool: "delete_resource",
         capability: "admin",
-        namespace,
+        namespace: target,
         context,
         destructive: true,
       });

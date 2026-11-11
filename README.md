@@ -20,7 +20,7 @@ The design goal is **safe by default**: it starts read-only, can be scoped to an
 | Concern | Flag | Default | Effect |
 | --- | --- | --- | --- |
 | What can the server do at all? | `K8S_MODE` | `read-only` | `read-only` exposes only reads; `read-write` adds mutations; `admin` adds destructive tools. Tools above the mode are **never registered**. |
-| Which namespaces are in scope? | `K8S_NAMESPACE_ALLOWLIST` | *(all)* | When set, any operation on a namespace outside the list is refused. |
+| Which namespaces are in scope? | `K8S_NAMESPACE_ALLOWLIST` | *(all)* | When set, any operation on a namespace outside the list is refused. For a `Namespace` object the check is on its name; with no namespace given, a namespaced kind is checked against the context's default namespace. |
 | Which namespaces are read-only forever? | `K8S_PROTECTED_NAMESPACES` | `kube-system,kube-public,kube-node-lease` | Can be read but never mutated or deleted, regardless of mode. |
 | Which clusters are reachable? | `K8S_CONTEXT_ALLOWLIST` | *(all)* | When set, only these kube-config contexts may be targeted. |
 | Can it delete? | `K8S_ALLOW_DELETE` | `false` | `delete_resource` needs this **and** admin mode. |
