@@ -16,7 +16,7 @@ export const ALL_TOOLS: ToolDef[] = [...readTools, ...writeTools, ...adminTools]
 export function buildServer(config: AppConfig): { server: McpServer; enabled: string[] } {
   const policy = new SecurityPolicy(config.security);
   const client = new K8sClient(config.connection);
-  const server = new McpServer({ name: "mcp-kubernetes", version: "0.4.0" });
+  const server = new McpServer({ name: "mcp-kubernetes", version: "0.4.1" });
   const guard = new GuardClient(loadGuardConfig());
   const confirmer = makeConfirmer(server, {
     name: "mcp-kubernetes",
